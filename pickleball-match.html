@@ -1,0 +1,3264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>球馆小赛</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.1/dist/jspdf.plugin.autotable.min.js"></script>
+<style>
+  :root {
+    --primary: #1a6b3c;
+    --primary-light: #e8f5ee;
+    --primary-mid: #2d9a57;
+    --accent: #e05a1c;
+    --accent-light: #fdf0e8;
+    --blue: #1a56a0;
+    --blue-light: #e8f0fb;
+    --gray: #f4f4f4;
+    --gray2: #e8e8e8;
+    --text: #1a1a1a;
+    --text2: #555;
+    --text3: #999;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow-sm: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", PingFang SC, Helvetica, sans-serif;
+    background: #f0f2f5;
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 15px;
+  }
+  .app-header {
+    background: var(--primary);
+    color: #fff;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    gap: 8px;
+  }
+  .app-header .logo { font-size: 16px; font-weight: 600; letter-spacing: 0.5px; white-space: nowrap; }
+  .app-header .logo span { color: #7ee8a2; }
+  .header-center { flex: 1; display: flex; justify-content: center; }
+  .tournament-switcher {
+    background: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 20px;
+    padding: 4px 14px 4px 12px;
+    font-size: 13px;
+    color: #fff;
+    cursor: pointer;
+    white-space: nowrap;
+    display: flex; align-items: center; gap: 6px;
+    transition: background 0.2s;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tournament-switcher:hover { background: rgba(255,255,255,0.28); }
+  .tournament-switcher .caret { font-size: 10px; opacity: 0.7; }
+  .header-right { display: flex; align-items: center; gap: 8px; }
+  .badge {
+    background: rgba(255,255,255,0.2);
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  /* Tournament Modal */
+  .modal-mask {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 1000;
+    justify-content: center;
+    align-items: flex-start;
+    padding-top: 60px;
+  }
+  .modal-mask.show { display: flex; }
+  .modal-box {
+    background: #fff;
+    border-radius: var(--radius);
+    width: 92%;
+    max-width: 440px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+    animation: modalIn 0.2s ease;
+  }
+  @keyframes modalIn { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--gray2);
+    position: sticky; top: 0; background: #fff; z-index: 1;
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+  .modal-title { font-size: 16px; font-weight: 600; }
+  .modal-close {
+    width: 30px; height: 30px; border: none; background: var(--gray);
+    border-radius: 50%; font-size: 16px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .modal-body { padding: 12px; }
+  .tour-list { display: flex; flex-direction: column; gap: 8px; }
+  .tour-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px;
+    background: var(--gray);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.15s;
+    border: 2px solid transparent;
+  }
+  .tour-item:hover { background: var(--primary-light); }
+  .tour-item.active { border-color: var(--primary); background: var(--primary-light); }
+  .tour-item-info { flex: 1; min-width: 0; }
+  .tour-item-name { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tour-item-meta { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .tour-item-status { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500; flex-shrink: 0; }
+  .tour-item-status.ongoing { background: #e8f5ee; color: var(--primary); }
+  .tour-item-status.done { background: #eee; color: var(--text3); }
+  .tour-item-status.setup { background: var(--accent-light); color: var(--accent); }
+  .tour-item-del {
+    width: 28px; height: 28px; border: none; background: #fde8e8; color: #c0392b;
+    border-radius: 50%; font-size: 14px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .btn-new-tour {
+    width: 100%; padding: 11px; border: 2px dashed var(--primary); background: none;
+    border-radius: var(--radius-sm); color: var(--primary); font-size: 14px;
+    font-weight: 500; cursor: pointer; margin-top: 10px; transition: background 0.15s;
+  }
+  .btn-new-tour:hover { background: var(--primary-light); }
+  /* 赛事列表页 */
+  #page-list {
+    display: none;
+    min-height: calc(100vh - 52px);
+    background: #f0f2f5;
+  }
+  #page-list.active { display: block; }
+  .list-header {
+    background: var(--primary);
+    padding: 20px 16px 16px;
+    color: #fff;
+  }
+  .list-header-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .list-header-sub { font-size: 13px; opacity: 0.8; }
+  .list-body { padding: 14px 12px; max-width: 540px; margin: 0 auto; }
+  .list-section-title { font-size: 12px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin: 12px 0 8px; }
+  .list-section-title:first-child { margin-top: 0; }
+  .list-card {
+    background: #fff;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+  .list-tour-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 13px 14px;
+    border-bottom: 1px solid var(--gray2);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .list-tour-item:last-child { border-bottom: none; }
+  .list-tour-item:hover { background: var(--primary-light); }
+  .list-tour-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--primary-light); color: var(--primary); font-size: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .list-tour-info { flex: 1; min-width: 0; }
+  .list-tour-name { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .list-tour-meta { font-size: 12px; color: var(--text3); margin-top: 2px; }
+  .list-tour-status { font-size: 11px; padding: 3px 9px; border-radius: 10px; font-weight: 500; flex-shrink: 0; }
+  .list-tour-status.ongoing { background: #e8f5ee; color: var(--primary); }
+  .list-tour-status.done { background: #eee; color: var(--text3); }
+  .list-tour-status.setup { background: var(--accent-light); color: var(--accent); }
+  .list-tour-del { width: 30px; height: 30px; border: none; background: #fde8e8; color: #c0392b; border-radius: 50%; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s; }
+  .list-tour-del:hover { background: #ffb3b3; }
+  .list-tour-arrow { color: var(--text3); font-size: 16px; flex-shrink: 0; }
+  .btn-new-list { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 14px; background: #fff; border: 2px dashed var(--primary); border-radius: var(--radius); color: var(--primary); font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 12px; transition: background 0.15s; }
+  .btn-new-list:hover { background: var(--primary-light); }
+  /* 首页菜单 Tab */
+  .list-tabs {
+    display: flex;
+    background: #fff;
+    border-bottom: 1px solid var(--gray2);
+  }
+  .list-tab-btn {
+    flex: 1;
+    padding: 10px 4px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text2);
+    border: none;
+    background: none;
+    cursor: pointer;
+    border-bottom: 2.5px solid transparent;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .list-tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .list-tab-btn:hover:not(.active) { color: var(--primary); }
+  .list-tour-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+  .list-tour-main {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 8px 13px 14px;
+    border-bottom: 1px solid var(--gray2);
+    cursor: pointer;
+    transition: background 0.15s;
+    min-width: 0;
+  }
+  .list-tour-row:last-child .list-tour-main { border-bottom: none; }
+  .list-tour-main:hover { background: var(--primary-light); }
+  .list-tour-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding-right: 6px;
+    flex-shrink: 0;
+    width: 42px;
+    justify-content: flex-end;
+  }
+  .list-empty-card { background: #fff; border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; }
+
+  /* 赛程卡片 */
+  .sch-card { background: #fff; border-radius: var(--radius); box-shadow: var(--shadow-sm); margin-bottom: 10px; overflow: hidden; }
+  .sch-card-header { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--gray2); cursor: pointer; transition: background 0.15s; }
+  .sch-card-header:hover { background: var(--primary-light); }
+  .sch-card-header .icon { font-size: 20px; }
+  .sch-card-header .info { flex: 1; min-width: 0; }
+  .sch-card-header .name { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sch-card-header .meta { font-size: 12px; color: var(--text3); margin-top: 2px; }
+  .sch-card-header .badge { font-size: 11px; padding: 3px 8px; border-radius: 10px; font-weight: 500; flex-shrink: 0; }
+  .sch-card-header .arrow { font-size: 16px; color: var(--text3); transition: transform 0.2s; flex-shrink: 0; }
+  .sch-card-header.open .arrow { transform: rotate(90deg); }
+  .sch-card-body { display: none; padding: 8px 12px 12px; }
+  .sch-card-body.open { display: block; }
+  .sch-card-body .round-item { margin-bottom: 10px; }
+  .sch-card-body .round-item:last-child { margin-bottom: 0; }
+  .sch-card-body .round-hdr { font-size: 12px; font-weight: 600; padding: 5px 8px; border-radius: 6px; margin-bottom: 6px; display: flex; justify-content: space-between; background: var(--primary-light); color: var(--primary); }
+  .sch-card-body .round-hdr.done { background: #eee; color: var(--text3); }
+  .sch-card-body .round-hdr.current { background: #d4edda; }
+  .sch-card-body .match-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 6px; font-size: 13px; background: var(--gray); margin-bottom: 4px; }
+  .sch-card-body .match-row:last-child { margin-bottom: 0; }
+  .sch-card-body .court-lbl { font-size: 11px; color: var(--blue); font-weight: 600; min-width: 30px; }
+  .sch-card-body .team-lbl { flex: 1; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sch-card-body .team-lbl.win { color: var(--primary); }
+  .sch-card-body .team-lbl.lose { color: var(--text3); }
+  .sch-card-body .score-lbl { font-weight: 700; min-width: 44px; text-align: center; font-size: 13px; }
+  .sch-card-body .score-lbl.done { color: var(--primary); }
+  .sch-card-body .score-lbl.pending { color: var(--text3); }
+  .sch-card-actions { display: flex; gap: 8px; padding: 6px 12px 10px; border-top: 1px solid var(--gray2); }
+  .sch-card-actions .btn { flex: 1; }
+
+  /* 场地视图 */
+  .sch-view-toggle { display: flex; background: var(--gray); border-radius: var(--radius-sm); padding: 3px; margin-bottom: 12px; gap: 2px; }
+  .sch-view-toggle .toggle-btn { flex: 1; padding: 6px 8px; border: none; background: none; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; color: var(--text2); transition: background 0.15s, color 0.15s; }
+  .sch-view-toggle .toggle-btn.active { background: #fff; color: var(--primary); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .sch-court-grid { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+  .sch-court-col { flex: 1; min-width: 160px; display: flex; flex-direction: column; gap: 8px; }
+  .sch-court-card { background: #fff; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); overflow: hidden; }
+  .sch-court-card-header { padding: 8px 10px; font-size: 12px; font-weight: 600; background: var(--blue-light); color: var(--blue); text-align: center; }
+  .sch-court-card-body { padding: 6px 8px; }
+  .sch-court-match { padding: 7px 8px; border-bottom: 1px solid var(--gray2); font-size: 12px; }
+  .sch-court-match:last-child { border-bottom: none; }
+  .sch-court-match .round-lbl { font-size: 10px; color: var(--text3); margin-bottom: 2px; }
+  .sch-court-match .teams { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .sch-court-match .team { flex: 1; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sch-court-match .team.winner { color: var(--primary); }
+  .sch-court-match .team.loser { color: var(--text3); }
+  .sch-court-match .score { font-weight: 700; min-width: 36px; text-align: center; font-size: 12px; }
+  .sch-court-match .vs { font-size: 10px; color: var(--text3); flex-shrink: 0; }
+  .sch-court-match.done .score { color: var(--primary); }
+  .sch-court-match.pending .score { color: var(--text3); }
+  .sch-court-match .result-badge { font-size: 10px; padding: 1px 4px; border-radius: 4px; font-weight: 600; }
+  .sch-court-match .result-badge.win { background: var(--primary-light); color: var(--primary); }
+  .sch-court-match .result-badge.lose { background: var(--gray); color: var(--text3); }
+  .sch-court-empty { padding: 16px 8px; text-align: center; color: var(--text3); font-size: 12px; }
+
+  /* 场地独立比赛视图 */
+  .court-card { background: #fff; border-radius: var(--radius); box-shadow: var(--shadow-sm); margin-bottom: 14px; overflow: hidden; }
+  .court-card-header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--gray2); }
+  .court-card-header .court-icon { font-size: 20px; }
+  .court-card-header .court-info { flex: 1; min-width: 0; }
+  .court-card-header .court-name { font-size: 14px; font-weight: 700; color: var(--blue); }
+  .court-card-header .court-status { font-size: 12px; color: var(--text3); margin-top: 1px; }
+  .court-card-header .court-badge { font-size: 11px; padding: 3px 8px; border-radius: 10px; font-weight: 600; }
+  .court-card-header .court-badge.idle { background: var(--gray); color: var(--text3); }
+  .court-card-header .court-badge.active { background: var(--primary-light); color: var(--primary); }
+  .court-card-header .court-badge.done { background: #eee; color: #888; }
+  .court-card-body { padding: 12px 14px; }
+  .court-nav { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  .court-round-skip { display: flex; align-items: center; gap: 4px; }
+  .court-round-skip label { font-size: 12px; color: var(--text2); white-space: nowrap; }
+  .court-round-skip select { border: 1px solid var(--gray2); border-radius: 6px; padding: 4px 8px; font-size: 12px; background: #fff; }
+  .all-courts-done-banner { background: var(--primary-light); border: 2px solid var(--primary); border-radius: var(--radius-sm); padding: 12px 16px; text-align: center; margin-bottom: 14px; font-size: 14px; color: var(--primary); font-weight: 600; }
+  .game-overall-progress { background: var(--gray); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 14px; }
+  .game-overall-progress .progress-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--text2); margin-bottom: 6px; }
+  .game-overall-progress .progress-bar { background: var(--gray2); border-radius: 6px; height: 6px; overflow: hidden; }
+  .game-overall-progress .progress-fill { background: var(--primary); height: 100%; border-radius: 6px; transition: width 0.4s; }
+
+  /* 比赛设置独立页 */
+  #page-setup-detail {
+    display: none;
+    min-height: calc(100vh - 52px);
+    background: #f0f2f5;
+  }
+  #page-setup-detail.active { display: block; }
+  .setup-back-bar {
+    background: #fff;
+    border-bottom: 1px solid var(--gray2);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .btn-back { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--primary); padding: 0 4px; }
+  .setup-back-title { font-size: 15px; font-weight: 600; flex: 1; }
+
+  .tabs {
+    display: flex;
+    background: #fff;
+    border-bottom: 1px solid var(--gray2);
+    position: sticky;
+    top: 52px;
+    z-index: 99;
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 11px 4px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text2);
+    border: none;
+    background: none;
+    cursor: pointer;
+    border-bottom: 2.5px solid transparent;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .page { display: none; padding: 14px 12px; max-width: 640px; margin: 0 auto; }
+  .page.active { display: block; }
+  .card {
+    background: #fff;
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 14px;
+    box-shadow: var(--shadow-sm);
+  }
+  .card-title {
+    font-size: 14px; font-weight: 600; color: var(--text2);
+    margin-bottom: 12px; display: flex; align-items: center; gap: 6px;
+  }
+  .card-title .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); flex-shrink: 0; }
+  .player-list { display: flex; flex-direction: column; gap: 8px; }
+  .player-row { display: flex; align-items: center; gap: 8px; }
+  .player-num {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--primary-light); color: var(--primary);
+    font-size: 12px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .player-input {
+    flex: 1; border: 1px solid var(--gray2); border-radius: var(--radius-sm);
+    padding: 9px 12px; font-size: 15px; outline: none; transition: border-color 0.2s;
+  }
+  .player-input:focus { border-color: var(--primary); }
+  .btn-del {
+    width: 30px; height: 30px; border: none; background: #fde8e8; color: #c0392b;
+    border-radius: 50%; font-size: 16px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    border: none; border-radius: var(--radius-sm); padding: 11px 20px;
+    font-size: 14px; font-weight: 500; cursor: pointer; transition: opacity 0.2s, background 0.2s;
+  }
+  .btn:active { opacity: 0.8; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-secondary { background: var(--gray); color: var(--text); }
+  .btn-accent { background: var(--accent); color: #fff; }
+  .btn-outline { background: none; border: 1.5px solid var(--primary); color: var(--primary); padding: 9px 16px; font-size: 13px; }
+  .btn-sm { padding: 7px 14px; font-size: 13px; }
+  .btn-block { width: 100%; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .admin-badge { background: rgba(255,200,0,0.2); color: #FFD700; border-radius: 12px; padding: 3px 10px; font-size: 12px; font-weight: 600; }
+  .viewer-badge { background: rgba(255,255,255,0.18); color: #fff; border-radius: 12px; padding: 3px 10px; font-size: 12px; font-weight: 500; }
+
+  /* 固定搭档配置 */
+  .fixed-pair-card { background: #fff; border-radius: var(--radius); padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow-sm); }
+  .fixed-pair-card .card-title { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .fixed-pair-card .card-title .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .fixed-pair-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; max-height: 200px; overflow-y: auto; }
+  .fixed-pair-row { display: flex; align-items: center; gap: 8px; background: var(--gray); border-radius: var(--radius-sm); padding: 6px 10px; }
+  .fixed-pair-row .pair-num { font-size: 11px; color: var(--text3); min-width: 18px; }
+  .fixed-pair-row .pair-label { font-size: 13px; font-weight: 500; flex: 1; }
+  .fixed-pair-row .pair-label .teammate { color: var(--blue); font-weight: 600; }
+  .fixed-pair-row .btn-del { width: 24px; height: 24px; border: none; background: #fde8e8; color: #c0392b; border-radius: 50%; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .fixed-pair-empty { text-align: center; padding: 16px 8px; color: var(--text3); font-size: 12px; }
+  .fixed-pair-hint { font-size: 11px; color: var(--text3); line-height: 1.5; margin-top: 8px; padding: 8px 10px; background: var(--accent-light); border-radius: 6px; }
+  .fixed-pair-plus { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .fixed-pair-plus .vs-tag { font-size: 12px; color: var(--accent); font-weight: 600; }
+  .fixed-pair-toggle { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .fixed-pair-toggle label { font-size: 13px; color: var(--text2); }
+  .fixed-pair-toggle input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary); }
+  .viewer-mode-banner { background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #856404; }
+  .viewer-mode-banner .icon { font-size: 18px; }
+  .setup-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+  .setup-label { font-size: 14px; min-width: 80px; color: var(--text2); }
+  select { flex: 1; border: 1px solid var(--gray2); border-radius: var(--radius-sm); padding: 9px 10px; font-size: 14px; outline: none; background: #fff; }
+  .court-badge { display: inline-flex; align-items: center; background: var(--blue-light); color: var(--blue); border-radius: 6px; padding: 3px 10px; font-size: 12px; font-weight: 600; margin-bottom: 8px; }
+  .match-block { background: var(--gray); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 10px; }
+  .match-block:last-of-type { margin-bottom: 0; }
+  .match-teams { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .team-card { flex: 1; background: #fff; border-radius: var(--radius-sm); padding: 9px 10px; text-align: center; border: 1.5px solid var(--gray2); min-width: 0; transition: border-color 0.2s, background 0.2s; }
+  .team-card.winner { border-color: var(--primary); background: var(--primary-light); }
+  .team-card.loser { opacity: 0.72; }
+  .team-card .player-names { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .team-card .win-tag { display: inline-block; margin-top: 4px; background: var(--primary); color: #fff; border-radius: 10px; padding: 1px 8px; font-size: 11px; font-weight: 600; }
+  .team-card .lose-tag { display: inline-block; margin-top: 4px; background: var(--gray2); color: var(--text3); border-radius: 10px; padding: 1px 8px; font-size: 11px; }
+  .team-label { font-size: 11px; color: var(--text3); margin-bottom: 3px; }
+  .vs-badge { font-size: 13px; font-weight: 700; color: var(--accent); flex-shrink: 0; min-width: 28px; text-align: center; }
+  .score-row { display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .score-input { width: 58px; text-align: center; border: 1px solid var(--gray2); border-radius: 8px; padding: 7px 4px; font-size: 20px; font-weight: 700; outline: none; }
+  .score-input:focus { border-color: var(--primary); }
+  .score-sep { font-size: 18px; font-weight: 700; color: var(--text3); }
+  .score-display { text-align: center; font-size: 22px; font-weight: 700; color: var(--text); letter-spacing: 2px; padding: 4px 0; }
+  .round-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .round-num { font-size: 22px; font-weight: 700; color: var(--primary); }
+  .round-label { font-size: 12px; color: var(--text3); margin-top: 2px; }
+  .wait-list { display: flex; flex-wrap: wrap; gap: 8px; }
+  .wait-chip { background: #fff3e0; color: #8a4000; border-radius: 20px; padding: 5px 12px; font-size: 13px; font-weight: 500; }
+  .sch-round { margin-bottom: 12px; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--gray2); }
+  .sch-round-header { background: var(--primary); color: #fff; padding: 8px 14px; font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+  .sch-round-header.done { background: #888; }
+  .sch-round-header.current { background: var(--primary-mid); }
+  .sch-match-row { padding: 9px 14px; border-bottom: 1px solid var(--gray2); display: flex; align-items: center; gap: 4px; font-size: 13px; }
+  .sch-match-row:last-child { border-bottom: none; }
+  .sch-court { font-size: 11px; color: var(--blue); font-weight: 600; min-width: 36px; }
+  .sch-team { font-weight: 500; flex: 1; }
+  .sch-team.win { color: var(--primary); }
+  .sch-team.lose { color: var(--text3); }
+  .sch-score { font-weight: 700; min-width: 60px; text-align: center; }
+  .sch-score.done { color: var(--primary); }
+  .sch-score.pending { color: var(--text3); }
+  .sch-result { font-size: 11px; font-weight: 600; min-width: 24px; text-align: right; }
+  .sch-result.w { color: var(--primary); }
+  .sch-result.l { color: var(--text3); }
+  .lb-table { width: 100%; border-collapse: collapse; }
+  .lb-table th { background: var(--primary-light); color: var(--primary); font-size: 12px; font-weight: 600; padding: 8px 6px; text-align: center; }
+  .lb-table th:first-child { text-align: left; padding-left: 12px; }
+  .lb-table td { padding: 10px 6px; text-align: center; font-size: 13px; border-bottom: 1px solid var(--gray2); }
+  .lb-table td:first-child { text-align: left; padding-left: 12px; }
+  .lb-table tr:last-child td { border-bottom: none; }
+  .rank-badge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; font-size: 12px; font-weight: 700; margin-right: 6px; }
+  .rank-1 { background: #FFD700; color: #5a3a00; }
+  .rank-2 { background: #C0C0C0; color: #333; }
+  .rank-3 { background: #cd7f32; color: #fff; }
+  .rank-n { background: var(--gray2); color: var(--text2); }
+  .partner-list { display: flex; flex-direction: column; gap: 6px; }
+  .partner-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--gray); border-radius: var(--radius-sm); font-size: 13px; flex-wrap: wrap; }
+  .partner-name { font-weight: 600; min-width: 48px; }
+  .partner-chip { background: var(--blue-light); color: var(--blue); border-radius: 12px; padding: 3px 9px; font-size: 12px; }
+  .tag { display: inline-block; background: var(--primary-light); color: var(--primary); border-radius: 12px; padding: 2px 10px; font-size: 12px; font-weight: 500; }
+  .empty { text-align: center; padding: 40px 20px; color: var(--text3); font-size: 14px; }
+  .empty .icon { font-size: 40px; margin-bottom: 10px; }
+  #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(20px); background: rgba(26,26,26,0.88); color: #fff; padding: 10px 22px; border-radius: 24px; font-size: 14px; pointer-events: none; opacity: 0; transition: all 0.3s; z-index: 9999; white-space: nowrap; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .text-sm { font-size: 12px; color: var(--text3); }
+  .mt8 { margin-top: 8px; }
+  .mt12 { margin-top: 12px; }
+  .mb4 { margin-bottom: 4px; }
+  .bold { font-weight: 600; }
+  .green { color: var(--primary); }
+  .red { color: var(--accent); }
+  .all-done-banner { background: var(--primary-light); border: 1.5px solid var(--primary); border-radius: var(--radius-sm); padding: 8px 14px; font-size: 13px; color: var(--primary); font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .no-tour-selected { text-align: center; padding: 50px 20px; }
+  .no-tour-selected .icon { font-size: 48px; margin-bottom: 12px; }
+  .no-tour-selected .msg { font-size: 15px; color: var(--text2); margin-bottom: 16px; }
+  /* 报名页面 */
+  .reg-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--gray2); }
+  .reg-item:last-child { border-bottom: none; }
+  .reg-info { display: flex; flex-direction: column; gap: 2px; }
+  .reg-name { font-size: 15px; font-weight: 500; }
+  .reg-name.green { color: var(--primary-mid); }
+  .reg-time { font-size: 12px; color: var(--text3); }
+  /* 报名弹窗 */
+  #regModal .modal-box { max-width: 380px; }
+  #regModal .modal-title { font-size: 16px; font-weight: 600; }
+  /* 注册页 QR 隐藏 app header */
+  #app:hidden { display: none !important; }
+/* 打印预览样式 */
+#printPreviewModal .modal-box { background: #f0f2f5; }
+#printPreviewContent .print-paper {
+  background: #fff;
+  margin: 16px;
+  padding: 24px 20px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+}
+#printPreviewContent .print-paper .print-header {
+  text-align: center;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #000;
+  padding-bottom: 12px;
+}
+#printPreviewContent .print-paper .print-title {
+  font-size: 20px;
+  font-weight: bold;
+  color: #000;
+  margin-bottom: 8px;
+}
+#printPreviewContent .print-paper .print-meta {
+  font-size: 12px;
+  color: #333;
+}
+#printPreviewContent .print-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+#printPreviewContent .print-table th { background: #ddd; color: #000; border: 1px solid #666; padding: 8px; text-align: center; font-weight: 600; }
+#printPreviewContent .print-table th:nth-child(3), #printPreviewContent .print-table th:nth-child(5) { text-align: left; }
+#printPreviewContent .print-table td { padding: 9px 8px; text-align: center; border: 1px solid #888; vertical-align: middle; color: #000; }
+#printPreviewContent .print-table td.ta { text-align: left; }
+#printPreviewContent .print-table td.sc { font-weight: bold; font-size: 15px; }
+#printPreviewContent .print-table tbody tr:nth-child(even) { background: #f0f0f0; }
+#printPreviewContent .print-footer { text-align: center; font-size: 10px; color: #666; margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; }
+
+/* 赛程打印工具栏 */
+.sch-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 8px 14px; background: var(--gray); border-radius: var(--radius-sm); }
+  .sch-toolbar-label { font-size: 13px; color: var(--text2); }
+  /* 打印版内容（屏幕隐藏） */
+  .no-print-block { display: none; }
+  /* 打印样式 */
+  @media print {
+    @page { margin: 15mm 12mm; size: A4 portrait; }
+    body { background: #fff !important; color: #000; font-size: 12px; }
+    /* 隐藏所有 UI，仅显示赛程表 */
+    .app-header, .tabs, .page > div:not(#printSchedule),
+    .modal-mask, #toast, .sch-toolbar, .sch-round, .empty {
+      display: none !important;
+    }
+    #page-schedule { display: block !important; }
+    #printSchedule { display: block !important; }
+    #regModal, #tourModal { display: none !important; }
+    .no-print-block { display: block !important; }
+    /* 打印表头 - 黑白 */
+    .print-header { text-align: center; margin-bottom: 16px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+    .print-title { font-size: 20px; font-weight: bold; color: #000; margin-bottom: 6px; }
+    .print-meta { font-size: 11px; color: #333; }
+    /* 打印表格 - 黑白 */
+    .print-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .print-table th { background: #ddd !important; color: #000; border: 1px solid #666; padding: 6px 8px; text-align: center; font-weight: 600; }
+    .print-table th:nth-child(3), .print-table th:nth-child(5) { text-align: left; }
+    .print-table td { padding: 7px 8px; text-align: center; border: 1px solid #888; vertical-align: middle; color: #000; }
+    .print-table td.ta { text-align: left; }
+    .print-table td.sc { font-weight: bold; font-size: 14px; }
+    .print-table tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
+    /* 打印页脚 - 黑白 */
+    .print-footer { text-align: center; font-size: 10px; color: #666; margin-top: 20px; border-top: 1px solid #ccc; padding-top: 8px; }
+  }
+  @media (max-width: 400px) {
+    .score-input { width: 50px; font-size: 18px; }
+    .team-card .player-names { font-size: 13px; }
+    .app-header .logo { font-size: 14px; }
+    .tournament-switcher { max-width: 140px; font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="logo">球馆<span>小赛</span></div>
+  <div class="header-center">
+    <div id="tourNameCenter" style="font-size:14px;font-weight:600;color:#fff;opacity:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:opacity 0.2s;"></div>
+  </div>
+  <div class="header-right" id="headerRight">
+    <span id="adminBadge" style="display:none;background:rgba(255,200,0,0.2);border-radius:12px;padding:3px 10px;font-size:12px;font-weight:500;"></span>
+    <button id="btnHeaderShare" style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.25);border-radius:12px;padding:3px 10px;font-size:12px;color:#fff;cursor:pointer;display:none;" onclick="openShareModal()" title="分享赛事">📤 分享</button>
+    <button id="btnHeaderList" style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.25);border-radius:16px;padding:4px 12px;font-size:13px;color:#fff;cursor:pointer;display:none;" onclick="showListPage()">🏆 赛事列表</button>
+    <button id="btnHeaderSetup" style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.25);border-radius:16px;padding:4px 12px;font-size:13px;color:#fff;cursor:pointer;display:none;" onclick="showSetupDetailPage()">⚙ 设置</button>
+    <button id="btnHeaderAdminExit" style="background:rgba(255,100,100,0.2);border:1px solid rgba(255,100,100,0.3);border-radius:12px;padding:3px 10px;font-size:12px;color:#ff8888;cursor:pointer;display:none;" onclick="exitAdminMode()" title="退出管理员模式">👁 退出</button>
+    <span class="badge" id="statusBadge" style="display:none;">未开始</span>
+  </div>
+</header>
+
+<div id="app">
+
+<!-- 赛事列表页（首页） -->
+<div id="page-list" class="active">
+  <div class="list-header">
+    <div class="list-header-title">🏓 我的赛事</div>
+    <div class="list-header-sub">管理和创建您的比赛</div>
+  </div>
+  <!-- 首页菜单 Tab -->
+  <div class="list-tabs" id="listTabs">
+    <button class="list-tab-btn active" data-ltab="events" onclick="switchListTab('events')">🏆 我的赛事</button>
+    <button class="list-tab-btn" data-ltab="schedule" onclick="switchListTab('schedule')">📅 赛程</button>
+    <button class="list-tab-btn" data-ltab="results" onclick="switchListTab('results')">🏅 成绩</button>
+  </div>
+  <div class="list-body">
+    <!-- 我的赛事 -->
+    <div id="listPanel-events">
+      <div class="list-card" id="tourListCard">
+        <div id="tourListItems"></div>
+      </div>
+      <button class="btn-new-list" onclick="createTournamentFromList()">＋ 新建赛事</button>
+    </div>
+    <!-- 赛程（汇总） -->
+    <div id="listPanel-schedule" style="display:none;"></div>
+    <!-- 成绩（汇总） -->
+    <div id="listPanel-results" style="display:none;"></div>
+  </div>
+</div>
+
+<!-- 管理员登录页 -->
+<div id="page-login" style="display:none;">
+  <div style="max-width:400px;margin:60px auto 0;padding:0 24px;text-align:center;">
+    <div style="font-size:48px;margin-bottom:16px;">🔐</div>
+    <div style="font-size:20px;font-weight:700;color:#fff;margin-bottom:6px;" id="loginTourName">赛事名称</div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:32px;">请输入管理员密码以继续</div>
+    <div style="background:rgba(255,255,255,0.07);border-radius:var(--radius);padding:20px;">
+      <input class="player-input" id="loginPasswordInput" type="password" placeholder="管理员密码" style="width:100%;text-align:center;font-size:16px;letter-spacing:4px;margin-bottom:14px;" onkeydown="if(event.key==='Enter')submitLoginFromLoginPage()">
+      <div id="loginErrorMsg" style="color:#e74c3c;font-size:12px;margin-bottom:10px;display:none;">密码错误，请重试</div>
+      <button class="btn btn-primary" style="width:100%;" onclick="submitLoginFromLoginPage()">确认登录</button>
+      <button class="btn btn-secondary" style="width:100%;margin-top:8px;" onclick="goBackToList()">返回赛事列表</button>
+    </div>
+  </div>
+</div>
+
+<!-- 比赛设置独立页 -->
+<div id="page-setup-detail">
+  <div class="setup-back-bar">
+    <button class="btn-back" onclick="goBackToList()">‹</button>
+    <div class="setup-back-title" id="setupDetailTitle">比赛设置</div>
+  </div>
+  <div style="padding:14px 12px;max-width:640px;margin:0 auto;" id="setupDetailContent"></div>
+</div>
+
+<!-- 比赛进行中视图（带tabs） -->
+<div id="matchView" style="display:none;">
+<div class="tabs">
+  <button class="tab-btn active" data-tab="game" onclick="switchTab('game')">当前轮</button>
+  <button class="tab-btn" data-tab="schedule" onclick="switchTab('schedule')">赛程</button>
+  <button class="tab-btn" data-tab="rank" onclick="switchTab('rank')">排行榜</button>
+  <button class="tab-btn" data-tab="reg" onclick="switchTab('reg')">报名</button>
+</div>
+
+<div class="page active" id="page-game">
+  <div id="gameContent"></div>
+</div>
+
+<div class="page" id="page-schedule">
+  <div id="scheduleContent"></div>
+</div>
+
+<div class="page" id="page-rank">
+  <div id="rankContent"></div>
+</div>
+
+<div class="page" id="page-reg">
+  <div id="regContent"></div>
+</div>
+</div><!-- end #matchView -->
+
+</div><!-- end #app -->
+
+<!-- 打印预览模态框 -->
+<div id="printPreviewModal" class="modal-mask">
+  <div class="modal-box" style="max-width:95%;width:820px;max-height:92vh;">
+    <div class="modal-header">
+      <div class="modal-title">📋 赛程 PDF 预览</div>
+      <button class="modal-close" onclick="closePrintPreview()">×</button>
+    </div>
+    <div id="printPreviewContent" style="padding:8px;overflow:auto;max-height:calc(92vh - 64px);background:#525659;display:flex;justify-content:center;">
+      <iframe id="pdfPreviewFrame" style="width:100%;height:70vh;border:none;border-radius:4px;background:#fff;"></iframe>
+    </div>
+    <div style="padding:10px 16px;border-top:1px solid var(--gray2);display:flex;justify-content:flex-end;gap:10px;background:#f9f9f9;">
+      <button class="btn btn-secondary" onclick="closePrintPreview()">取消</button>
+      <button class="btn btn-primary" onclick="downloadPDF()">⬇ 下载 PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- 扫码报名弹窗 -->
+<div id="regModal" class="modal-mask">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">扫码报名</div>
+      <button class="modal-close" onclick="closeRegModal()">×</button>
+    </div>
+    <div id="regModalBody" style="padding:20px 16px;"></div>
+  </div>
+</div>
+
+<!-- 新建赛事弹窗 -->
+<div id="createTourModal" class="modal-mask">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">新建赛事</div>
+      <button class="modal-close" onclick="closeCreateTourModal()">×</button>
+    </div>
+    <div class="modal-body" style="padding:16px;">
+      <div style="margin-bottom:14px;">
+        <label style="display:block;font-size:13px;font-weight:500;color:var(--text2);margin-bottom:6px;">赛事名称</label>
+        <input class="player-input" id="createTourName" placeholder="例如：周六友谊赛" style="width:100%;">
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="display:block;font-size:13px;font-weight:500;color:var(--text2);margin-bottom:6px;">新建时间</label>
+        <input class="player-input" id="createTourCreatedAt" type="datetime-local" style="width:100%;">
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="display:block;font-size:13px;font-weight:500;color:var(--text2);margin-bottom:6px;">比赛时间</label>
+        <input class="player-input" id="createTourMatchTime" type="datetime-local" style="width:100%;">
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="display:block;font-size:13px;font-weight:500;color:var(--text2);margin-bottom:6px;">管理员密码 <span style="font-weight:400;color:var(--text3);font-size:11px;">（用于授权输入比分）</span></label>
+        <input class="player-input" id="createTourAdminCode" placeholder="设置管理员密码" style="width:100%;">
+        <div class="text-sm mt4" style="color:var(--text3);font-size:11px;">留空则不设密码，所有人可编辑</div>
+      </div>
+      <div class="btn-row" style="gap:10px;">
+        <button class="btn btn-secondary" style="flex:1;" onclick="closeCreateTourModal()">取消</button>
+        <button class="btn btn-primary" style="flex:1;" onclick="confirmCreateTour()">创建</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 分享弹窗 -->
+<div id="shareModal" class="modal-mask">
+  <div class="modal-box" style="max-width:360px;">
+    <div class="modal-header">
+      <div class="modal-title">📤 分享赛事</div>
+      <button class="modal-close" onclick="closeShareModal()">×</button>
+    </div>
+    <div class="modal-body" style="padding:20px 16px;text-align:center;">
+      <div style="font-size:14px;font-weight:600;margin-bottom:4px;" id="shareTourName">赛事名称</div>
+      <div class="text-sm mb4" id="shareTourMeta" style="color:var(--text3);font-size:12px;"></div>
+      <div id="shareQRCode" style="margin:12px auto;display:inline-block;"></div>
+      <div style="margin-bottom:12px;">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">分享链接</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input class="player-input" id="shareLinkInput" readonly style="flex:1;font-size:12px;padding:8px 10px;">
+          <button class="btn btn-primary btn-sm" onclick="copyShareLink()">复制</button>
+        </div>
+      </div>
+      <div class="text-sm" style="color:var(--text3);font-size:11px;line-height:1.5;">
+        提示：截图二维码发送给朋友<br>或在微信中长按识别
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 管理员验证弹窗 -->
+<div id="adminVerifyModal" class="modal-mask">
+  <div class="modal-box" style="max-width:320px;">
+    <div class="modal-header">
+      <div class="modal-title">🔐 管理员验证</div>
+      <button class="modal-close" onclick="closeAdminVerify()">×</button>
+    </div>
+    <div class="modal-body" style="padding:20px 16px;">
+      <div style="text-align:center;margin-bottom:16px;">
+        <div style="font-size:32px;margin-bottom:8px;">🔒</div>
+        <div style="font-size:14px;color:var(--text2);">该赛事已设置管理员权限</div>
+        <div class="text-sm mt4" style="color:var(--text3);">请输入管理员密码以编辑比分</div>
+      </div>
+      <div style="margin-bottom:14px;">
+        <input class="player-input" id="adminVerifyInput" type="password" placeholder="请输入管理员密码" style="width:100%;text-align:center;font-size:16px;letter-spacing:4px;">
+      </div>
+      <div id="adminVerifyError" style="color:#c0392b;font-size:12px;text-align:center;margin-bottom:8px;display:none;">密码错误，请重试</div>
+      <button class="btn btn-primary btn-block" onclick="submitAdminVerify()">确认</button>
+      <button class="btn btn-secondary btn-block mt8" onclick="closeAdminVerify()">以观众身份查看</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// =================== ADMIN MODE ===================
+// adminMode: session-level flag, not persisted
+let isAdminMode = false; // global flag for current session
+
+function isAdmin() {
+  if (!state) return false;
+  // If no admin code is set, everyone is admin
+  if (!state.adminCode) return true;
+  return isAdminMode;
+}
+
+function requireAdmin(callback) {
+  if (isAdmin()) {
+    callback && callback();
+    return;
+  }
+  // Show verification modal
+  document.getElementById('adminVerifyModal').classList.add('show');
+  document.getElementById('adminVerifyInput').value = '';
+  document.getElementById('adminVerifyError').style.display = 'none';
+  setTimeout(function() { document.getElementById('adminVerifyInput').focus(); }, 100);
+  // Store the callback
+  window._pendingAdminCallback = callback;
+}
+
+function submitAdminVerify() {
+  var code = document.getElementById('adminVerifyInput').value;
+  if (code === state.adminCode) {
+    isAdminMode = true;
+    closeAdminVerify();
+    toast('已获得管理员权限');
+    // Update UI
+    updateAdminBadge();
+    renderGame();
+    // Execute pending callback
+    if (window._pendingAdminCallback) {
+      window._pendingAdminCallback();
+      window._pendingAdminCallback = null;
+    }
+  } else {
+    document.getElementById('adminVerifyError').style.display = 'block';
+    document.getElementById('adminVerifyInput').value = '';
+  }
+}
+
+function closeAdminVerify() {
+  document.getElementById('adminVerifyModal').classList.remove('show');
+  window._pendingAdminCallback = null;
+}
+
+function exitAdminMode() {
+  isAdminMode = false;
+  updateAdminBadge();
+  renderGame();
+  toast('已退出管理员模式');
+}
+
+function updateAdminBadge() {
+  var badge = document.getElementById('adminBadge');
+  if (!badge) return;
+  if (!state) {
+    badge.style.display = 'none';
+    return;
+  }
+  if (state.adminCode) {
+    badge.style.display = '';
+    badge.textContent = isAdminMode ? '👑 管理员' : '👁 观众';
+    badge.style.background = isAdminMode ? 'rgba(255,200,0,0.2)' : 'rgba(255,255,255,0.18)';
+    badge.style.color = isAdminMode ? '#FFD700' : '#fff';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function openAdminSettings() {
+  if (!state) return;
+  var currentCode = state.adminCode || '';
+  var html = '<div class="modal-body" style="padding:16px;">';
+  html += '<div style="margin-bottom:14px;">';
+  html += '<label style="display:block;font-size:13px;font-weight:500;color:var(--text2);margin-bottom:6px;">设置管理员密码</label>';
+  html += '<input class="player-input" id="adminCodeInput" type="password" placeholder="输入新密码（留空取消密码）" style="width:100%;">';
+  if (currentCode) {
+    html += '<div class="text-sm mt4" style="color:var(--text3);font-size:11px;">当前已设置密码（修改将覆盖原密码）</div>';
+  }
+  html += '</div>';
+  html += '<div style="margin-bottom:14px;">';
+  html += '<label style="display:block;font-size:13px;font-weight:500;color:var(--text2);margin-bottom:6px;">确认密码</label>';
+  html += '<input class="player-input" id="adminCodeConfirm" type="password" placeholder="再次输入密码" style="width:100%;">';
+  html += '</div>';
+  html += '<div class="btn-row" style="gap:10px;">';
+  html += '<button class="btn btn-secondary" style="flex:1;" onclick="closeCreateTourModal()">取消</button>';
+  html += '<button class="btn btn-primary" style="flex:1;" onclick="saveAdminCode()">保存</button>';
+  html += '</div></div>';
+
+  var modal = document.createElement('div');
+  modal.className = 'modal-mask show';
+  modal.id = 'adminSettingsModal';
+  modal.innerHTML = '<div class="modal-box">' +
+    '<div class="modal-header">' +
+      '<div class="modal-title">⚙ 管理员设置</div>' +
+      '<button class="modal-close" onclick="document.getElementById(\'adminSettingsModal\').classList.remove(\'show\');document.getElementById(\'adminSettingsModal\').remove()">×</button>' +
+    '</div>' + html +
+  '</div>';
+  document.body.appendChild(modal);
+}
+
+function saveAdminCode() {
+  var code = document.getElementById('adminCodeInput').value;
+  var confirm = document.getElementById('adminCodeConfirm').value;
+  var modal = document.getElementById('adminSettingsModal');
+
+  if (code && code !== confirm) {
+    toast('两次输入的密码不一致');
+    return;
+  }
+  state.adminCode = code || null;
+  // If clearing password, ensure admin mode
+  if (!state.adminCode) {
+    isAdminMode = true;
+  }
+  saveData();
+  modal.classList.remove('show');
+  modal.remove();
+  updateAdminBadge();
+  toast(code ? '管理员密码已设置' : '管理员密码已取消');
+}
+
+// =================== SHARE ===================
+let shareQR = null;
+
+function openShareModal() {
+  if (!state) return;
+  var shareUrl = getShareUrl();
+  document.getElementById('shareTourName').textContent = state.name || '未命名赛事';
+  var playerCount = (state.players || []).filter(function(p){return p&&p.trim();}).length;
+  document.getElementById('shareTourMeta').textContent = playerCount + '人 · ' + (state.rounds||[]).length + '轮';
+  document.getElementById('shareLinkInput').value = shareUrl;
+
+  // Generate QR code
+  var qrContainer = document.getElementById('shareQRCode');
+  qrContainer.innerHTML = '';
+  if (shareQR) { shareQR.clear(); shareQR = null; }
+  shareQR = new QRCode(qrContainer, {
+    text: shareUrl,
+    width: 160,
+    height: 160,
+    colorDark: '#000000',
+    colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.M
+  });
+
+  document.getElementById('shareModal').classList.add('show');
+}
+
+function closeShareModal() {
+  document.getElementById('shareModal').classList.remove('show');
+}
+
+function getShareUrl() {
+  var base = window.location.origin + window.location.pathname;
+  return base + '?tour=' + encodeURIComponent(state.id);
+}
+
+function copyShareLink() {
+  var input = document.getElementById('shareLinkInput');
+  input.select();
+  try {
+    navigator.clipboard.writeText(input.value).then(function() {
+      toast('链接已复制到剪贴板');
+    }).catch(function() {
+      document.execCommand('copy');
+      toast('链接已复制到剪贴板');
+    });
+  } catch(e) {
+    document.execCommand('copy');
+    toast('链接已复制到剪贴板');
+  }
+}
+
+// Handle URL parameter on load
+function handleUrlParams() {
+  var params = new URLSearchParams(window.location.search);
+  var tourId = params.get('tour');
+  if (tourId) {
+    var t = data.tournaments.find(function(x) { return x.id === tourId; });
+    if (t) {
+      activateTournament(t.id);
+      // Check if needs admin verification
+      if (t.adminCode && !isAdminMode) {
+        // Show verify modal after list page loads
+        setTimeout(function() {
+          requireAdmin(function() {
+            openTournament(t.id);
+          });
+        }, 100);
+      } else {
+        setTimeout(function() { openTournament(t.id); }, 100);
+      }
+      // Clear URL params
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }
+}
+
+// =================== DATA STRUCTURE (v5) ===================
+// data = { version:5, tournaments:[{id,name,createdAt,players[],rounds[],adminCode,...}], activeId }
+// adminCode: null means no password, everyone is admin
+// isAdminMode: session flag, not persisted
+const STORAGE_KEY = 'upb_pickleball_v5';
+let data = { version: 5, tournaments: [], activeId: null };
+let state = null;
+
+function saveData() { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) { data = JSON.parse(raw); }
+    else {
+      const old = localStorage.getItem('upb_pickleball_v4');
+      if (old) {
+        const s = JSON.parse(old);
+        const t = { ...s, id: 't_' + Date.now(), name: '比赛 1', createdAt: new Date().toISOString(), format: 'rotation', groupType: 'doubles', adminCode: null };
+        data = { version: 5, tournaments: [t], activeId: t.id };
+        saveData();
+      }
+    }
+    // 迁移：给没有 format 字段的旧比赛补上
+    if (data.tournaments) {
+      data.tournaments.forEach(function(t) {
+        if (t.format === undefined) t.format = 'rotation';
+        if (t.groupType === undefined) t.groupType = 'doubles';
+        if (t.adminCode === undefined) t.adminCode = null;
+        if (t.courts === undefined) t.courts = 2;
+        if (t.fixedPairs === undefined) t.fixedPairs = []; // 固定搭档配置
+      });
+    }
+  } catch(e) {}
+  activateTournament(data.activeId);
+}
+
+function activateTournament(id) {
+  data.activeId = id || null;
+  state = id ? (data.tournaments.find(t => t.id === id) || null) : null;
+  syncHeader();
+  saveData();
+}
+
+function syncHeader() {
+  var badge = document.getElementById('statusBadge');
+  var nameEl = document.getElementById('tourNameCenter');
+  var btnList = document.getElementById('btnHeaderList');
+  var btnSetup = document.getElementById('btnHeaderSetup');
+  var btnShare = document.getElementById('btnHeaderShare');
+  var btnAdminExit = document.getElementById('btnHeaderAdminExit');
+  var adminBadge = document.getElementById('adminBadge');
+
+  var view = getCurrentView();
+  if (view === 'list') {
+    // 赛事列表页：只显示 logo，不显示赛事名和按钮
+    nameEl.style.opacity = '0';
+    badge.style.display = 'none';
+    btnList.style.display = 'none';
+    btnSetup.style.display = 'none';
+    btnShare.style.display = 'none';
+    btnAdminExit.style.display = 'none';
+    adminBadge.style.display = 'none';
+  } else if (view === 'login') {
+    // 登录页：只显示 logo
+    nameEl.style.opacity = '0';
+    badge.style.display = 'none';
+    btnList.style.display = 'none';
+    btnSetup.style.display = 'none';
+    btnShare.style.display = 'none';
+    btnAdminExit.style.display = 'none';
+    adminBadge.style.display = 'none';
+  } else if (view === 'setup') {
+    // 设置页：显示赛事名 + 返回赛事列表按钮 + 分享按钮
+    nameEl.textContent = state ? (state.name || '新建赛事') : '比赛设置';
+    nameEl.style.opacity = '1';
+    badge.style.display = 'none';
+    btnList.style.display = '';
+    btnSetup.style.display = 'none';
+    btnShare.style.display = state && state.id ? '' : 'none';
+    btnAdminExit.style.display = 'none';
+    adminBadge.style.display = 'none';
+  } else {
+    // 比赛进行中：显示赛事名 + 状态 + 设置按钮 + 返回列表按钮 + 分享按钮 + 管理员按钮
+    nameEl.textContent = state ? (state.name || '未命名') : '';
+    nameEl.style.opacity = state ? '1' : '0';
+    badge.style.display = state ? '' : 'none';
+    btnList.style.display = '';
+    btnSetup.style.display = state ? '' : 'none';
+    btnShare.style.display = state && state.id ? '' : 'none';
+    if (state) {
+      if (state.finished) { badge.textContent = '已结束'; }
+      else if (state.started) { badge.textContent = '进行中'; }
+      else { badge.textContent = '未开始'; }
+    }
+    // 管理员相关
+    if (state && state.adminCode) {
+      adminBadge.style.display = '';
+      adminBadge.textContent = isAdminMode ? '👑 管理员' : '👁 观众';
+      adminBadge.style.background = isAdminMode ? 'rgba(255,200,0,0.2)' : 'rgba(255,255,255,0.18)';
+      adminBadge.style.color = isAdminMode ? '#FFD700' : '#fff';
+      btnAdminExit.style.display = isAdminMode ? '' : 'none';
+    } else {
+      adminBadge.style.display = 'none';
+      btnAdminExit.style.display = 'none';
+    }
+  }
+}
+
+function getCurrentView() {
+  if (document.getElementById('page-login').style.display === 'block') return 'login';
+  if (document.getElementById('page-list').classList.contains('active')) return 'list';
+  if (document.getElementById('page-setup-detail').classList.contains('active')) return 'setup';
+  return 'match';
+}
+
+// =================== VIEW NAVIGATION ===================
+function showListPage() {
+  document.getElementById('page-list').classList.add('active');
+  document.getElementById('page-setup-detail').classList.remove('active');
+  document.getElementById('matchView').style.display = 'none';
+  document.getElementById('page-login').style.display = 'none';
+  switchListTab(currentListTab); // 保持当前 Tab 状态并渲染
+  syncHeader();
+}
+
+function showSetupDetailPage() {
+  document.getElementById('page-list').classList.remove('active');
+  document.getElementById('page-setup-detail').classList.add('active');
+  document.getElementById('matchView').style.display = 'none';
+  document.getElementById('page-login').style.display = 'none';
+  renderSetupDetailPage();
+  syncHeader();
+}
+
+function showLoginPage() {
+  document.getElementById('page-list').classList.remove('active');
+  document.getElementById('page-setup-detail').classList.remove('active');
+  document.getElementById('matchView').style.display = 'none';
+  document.getElementById('page-login').style.display = 'block';
+  document.getElementById('loginTourName').textContent = state ? state.name : '赛事名称';
+  document.getElementById('loginPasswordInput').value = '';
+  document.getElementById('loginErrorMsg').style.display = 'none';
+  syncHeader();
+  setTimeout(function() { document.getElementById('loginPasswordInput').focus(); }, 100);
+}
+
+function submitLoginFromLoginPage() {
+  if (!state) return;
+  var code = document.getElementById('loginPasswordInput').value;
+  if (code === state.adminCode) {
+    isAdminMode = true;
+    updateAdminBadge();
+    toast('登录成功');
+    // 登录成功后去设置页
+    showSetupDetailPage();
+  } else {
+    document.getElementById('loginErrorMsg').style.display = 'block';
+    document.getElementById('loginPasswordInput').value = '';
+    document.getElementById('loginPasswordInput').focus();
+  }
+}
+
+function showMatchView() {
+  document.getElementById('page-list').classList.remove('active');
+  document.getElementById('page-setup-detail').classList.remove('active');
+  document.getElementById('matchView').style.display = 'block';
+  syncHeader();
+}
+
+function goBackToList() {
+  // 返回列表时重置当前赛事的管理员状态，下次打开重新验证
+  if (state) { state = null; isAdminMode = false; updateAdminBadge(); }
+  showListPage();
+}
+
+// =================== TOURNAMENT LIST PAGE ===================
+var currentListTab = 'events';
+
+function switchListTab(tab) {
+  currentListTab = tab;
+  // 更新 Tab 按钮状态
+  document.querySelectorAll('.list-tab-btn').forEach(function(b) {
+    b.classList.toggle('active', b.getAttribute('data-ltab') === tab);
+  });
+  // 切换内容面板
+  document.getElementById('listPanel-events').style.display = tab === 'events' ? '' : 'none';
+  document.getElementById('listPanel-schedule').style.display = tab === 'schedule' ? '' : 'none';
+  document.getElementById('listPanel-results').style.display = tab === 'results' ? '' : 'none';
+  // 渲染对应内容
+  if (tab === 'events') renderTournamentListPage();
+  else if (tab === 'schedule') renderListSchedule();
+  else if (tab === 'results') renderListResults();
+}
+
+function formatDateTime(isoStr) {
+  if (!isoStr) return '';
+  var d = new Date(isoStr);
+  var month = d.getMonth() + 1;
+  var day = d.getDate();
+  var hour = d.getHours();
+  var min = d.getMinutes();
+  var pad = function(n) { return n < 10 ? '0' + n : n; };
+  return pad(month) + '-' + pad(day) + ' ' + pad(hour) + ':' + pad(min);
+}
+
+function renderTournamentListPage() {
+  var container = document.getElementById('tourListItems');
+  if (!data.tournaments.length) {
+    container.innerHTML = '<div class="empty" style="padding:30px 16px;"><div class="icon">🏓</div>暂无赛事，请新建</div>';
+    return;
+  }
+
+  // 分类
+  var notStartedTours = data.tournaments.filter(function(t) { return !t.finished; });
+  var finishedTours = data.tournaments.filter(function(t) { return t.finished; });
+
+  var html = '';
+
+  // 已结束
+  if (finishedTours.length) {
+    html += '<div class="list-section-title">🏅 已结束</div>';
+    html += '<div class="list-card">';
+    finishedTours.forEach(function(t) {
+      html += renderTourRow(t);
+    });
+    html += '</div>';
+  }
+
+  // 已新建未比赛
+  if (notStartedTours.length) {
+    html += '<div class="list-section-title">📋 已新建未比赛</div>';
+    html += '<div class="list-card">';
+    notStartedTours.forEach(function(t) {
+      html += renderTourRow(t);
+    });
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
+
+  // 事件委托：绑定所有删除按钮
+  container.onclick = function(e) {
+    var btn = e.target.closest('[data-del]');
+    if (btn) {
+      e.stopPropagation();
+      deleteTournamentFromList(btn.getAttribute('data-del'));
+    }
+  };
+}
+
+function renderTourRow(t) {
+  var statusText = '待设置', statusClass = 'setup';
+  if (t.finished) { statusText = '已结束'; statusClass = 'done'; }
+  else if (t.started) { statusText = '进行中'; statusClass = 'ongoing'; }
+  var playerCount = (t.players || []).filter(function(p) { return p && p.trim(); }).length;
+  var roundCount = t.rounds ? t.rounds.length : 0;
+  var icon = t.started ? '🏆' : '📋';
+  var metaLines = [];
+  metaLines.push(playerCount + '人 · ' + roundCount + '轮');
+  if (t.matchTime) {
+    metaLines.push('比赛时间：' + formatDateTime(t.matchTime));
+  }
+  var metaHtml = metaLines.map(function(line) {
+    return '<div class="list-tour-meta" style="margin-top:1px;">' + line + '</div>';
+  }).join('');
+  return '<div class="list-tour-row">' +
+    '<div class="list-tour-main" onclick="openTournament(\'' + t.id + '\')">' +
+      '<div class="list-tour-icon">' + icon + '</div>' +
+      '<div class="list-tour-info">' +
+        '<div class="list-tour-name">' + (t.name || '未命名') + '</div>' +
+        metaHtml +
+      '</div>' +
+      '<span class="list-tour-status ' + statusClass + '">' + statusText + '</span>' +
+      '<span class="list-tour-arrow">›</span>' +
+    '</div>' +
+    '<div class="list-tour-actions">' +
+      '<button class="list-tour-del" data-del="' + t.id + '" title="删除赛事">×</button>' +
+    '</div>' +
+  '</div>';
+}
+
+function renderListSchedule() {
+  var container = document.getElementById('listPanel-schedule');
+  if (!data.tournaments.length) {
+    container.innerHTML = '<div class="empty" style="padding:40px 20px;"><div class="icon">📅</div>暂无赛程安排</div>';
+    return;
+  }
+  var html = '';
+  data.tournaments.forEach(function(t) {
+    var playerCount = (t.players||[]).filter(function(p){return p&&p.trim();}).length;
+    var rounds = t.rounds||[];
+    var roundCount = rounds.length;
+    var statusText = '待设置', statusClass = 'setup';
+    if (t.finished) { statusText = '已结束'; statusClass = 'done'; }
+    else if (t.started) { statusText = '进行中'; statusClass = 'ongoing'; }
+    var icon = t.started ? '🏆' : '📋';
+    var roundsHtml = '';
+    if (!t.started || !roundCount) {
+      roundsHtml = '<div class="text-sm" style="color:var(--text3);padding:12px 8px;text-align:center;">赛程将在比赛开始后生成</div>';
+    } else {
+      rounds.forEach(function(round, ri) {
+        var isDone = round.matches && round.matches.every(function(m){return m.done;});
+        var isCurrent = ri === t.currentRound;
+        var cls = isDone ? 'done' : isCurrent ? 'current' : '';
+        roundsHtml += '<div class="round-item">' +
+          '<div class="round-hdr ' + cls + '">' +
+            '<span>第 ' + (ri+1) + ' 轮' + (isCurrent ? ' ←' : '') + '</span>' +
+            '<span>' + (isDone ? '已完成' : isCurrent ? '进行中' : '待开始') + '</span>' +
+          '</div>';
+        if (round.matches && round.matches.length) {
+          round.matches.forEach(function(m, mi) {
+            var courtNum = mi + 1;
+            var teamANames = (m.teamA||[]).join(' / ');
+            var teamBNames = (m.teamB||[]).join(' / ');
+            var scoreA = m.scoreA, scoreB = m.scoreB;
+            var scoreText = m.done && scoreA !== null && scoreB !== null
+              ? scoreA + ' : ' + scoreB
+              : '— : —';
+            var clsA = m.done && scoreA > scoreB ? 'win' : m.done ? 'lose' : '';
+            var clsB = m.done && scoreB > scoreA ? 'win' : m.done ? 'lose' : '';
+            var scoreCls = m.done ? 'done' : 'pending';
+            roundsHtml += '<div class="match-row">' +
+              '<span class="court-lbl">场' + courtNum + '</span>' +
+              '<span class="team-lbl ' + clsA + '">' + teamANames + '</span>' +
+              '<span class="score-lbl ' + scoreCls + '">' + scoreText + '</span>' +
+              '<span class="team-lbl ' + clsB + '" style="text-align:right;">' + teamBNames + '</span>' +
+            '</div>';
+          });
+        } else {
+          roundsHtml += '<div class="match-row"><span class="text-sm" style="color:var(--text3);padding:4px 8px;">暂无对阵</span></div>';
+        }
+        roundsHtml += '</div>';
+      });
+    }
+    html += '<div class="sch-card" id="schCard-' + t.id + '">' +
+      '<div class="sch-card-header" onclick="toggleSchCard(\'' + t.id + '\')">' +
+        '<span class="icon">' + icon + '</span>' +
+        '<div class="info">' +
+          '<div class="name">' + (t.name||'未命名') + '</div>' +
+          '<div class="meta">' + playerCount + '人 · ' + roundCount + '轮' + (t.matchTime ? ' · ' + formatDateTime(t.matchTime) : '') + '</div>' +
+        '</div>' +
+        '<span class="badge ' + statusClass + '">' + statusText + '</span>' +
+        '<span class="arrow">›</span>' +
+      '</div>' +
+      '<div class="sch-card-body" id="schBody-' + t.id + '">' +
+        roundsHtml +
+        (t.started ? '<div class="sch-card-actions">' +
+          '<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openTournament(\'' + t.id + '\')">📋 查看详情</button>' +
+          '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();downloadScheduleFromList(\'' + t.id + '\')">⬇ 下载赛程</button>' +
+        '</div>' : '<div style="padding:6px 12px 4px;"><button class="btn btn-outline btn-sm" onclick="event.stopPropagation();openTournament(\'' + t.id + '\')">前往设置 ›</button></div>') +
+      '</div>' +
+    '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function toggleSchCard(id) {
+  var body = document.getElementById('schBody-' + id);
+  var header = document.querySelector('#schCard-' + id + ' .sch-card-header');
+  if (!body) return;
+  var isOpen = body.classList.contains('open');
+  body.classList.toggle('open');
+  if (header) header.classList.toggle('open', !isOpen);
+}
+
+function downloadScheduleFromList(id) {
+  var t = data.tournaments.find(function(x){return x.id===id;});
+  if (!t) return;
+  activateTournament(id);
+  showMatchView();
+  switchTab('schedule');
+  // 触发赛程页的 PDF 下载
+  setTimeout(function() { downloadPDF(); }, 300);
+}
+
+function renderListResults() {
+  var container = document.getElementById('listPanel-results');
+  var finishedTours = data.tournaments.filter(function(t) { return t.finished; });
+  var ongoingTours = data.tournaments.filter(function(t) { return t.started && !t.finished; });
+  var html = '';
+  if (ongoingTours.length) {
+    html += '<div class="list-section-title">🔄 进行中</div>';
+    ongoingTours.forEach(function(t) {
+      var rankings = computeRankings(t);
+      html += '<div class="list-card">' + renderRankingCard(t, rankings) + '</div>';
+    });
+  }
+  if (finishedTours.length) {
+    html += '<div class="list-section-title">🏅 已结束</div>';
+    finishedTours.forEach(function(t) {
+      var rankings = computeRankings(t);
+      html += '<div class="list-card">' + renderRankingCard(t, rankings) + '</div>';
+    });
+  }
+  if (!html) {
+    html = '<div class="empty" style="padding:40px 20px;"><div class="icon">🏅</div>暂无成绩记录</div>';
+  }
+  container.innerHTML = html;
+}
+
+function computeRankings(t) {
+  var players = t.players || [];
+  var scores = {};
+  players.forEach(function(p) { if (p && p.trim()) scores[p.trim()] = { name: p.trim(), points: 0, wins: 0, losses: 0 }; });
+  (t.rounds||[]).forEach(function(round) {
+    (round.matches||[]).forEach(function(m) {
+      if (m.done) {
+        var pts = t.pointsRule || '3-1';
+        var parts = pts.split('-');
+        var winPts = parseInt(parts[0]), losePts = parseInt(parts[1]);
+        if (m.scoreA > m.scoreB) {
+          (m.teamA||[]).forEach(function(p){ if(p&&scores[p.trim()]){ scores[p.trim()].points += winPts; scores[p.trim()].wins++; }});
+          (m.teamB||[]).forEach(function(p){ if(p&&scores[p.trim()]){ scores[p.trim()].points += losePts; scores[p.trim()].losses++; }});
+        } else {
+          (m.teamB||[]).forEach(function(p){ if(p&&scores[p.trim()]){ scores[p.trim()].points += winPts; scores[p.trim()].wins++; }});
+          (m.teamA||[]).forEach(function(p){ if(p&&scores[p.trim()]){ scores[p.trim()].points += losePts; scores[p.trim()].losses++; }});
+        }
+      }
+    });
+  });
+  return Object.values(scores).sort(function(a,b){ return b.points - a.points || b.wins - a.wins; });
+}
+
+function renderRankingCard(t, rankings) {
+  var meta = ((t.players||[]).filter(function(p){return p&&p.trim();}).length) + '人 · ' + (t.rounds||[]).length + '轮';
+  var html = '<div style="padding:12px 14px;"><div style="font-weight:600;font-size:15px;margin-bottom:4px;">' + (t.name||'未命名') + '</div>' +
+    '<div class="text-sm mb4">' + meta + '</div>';
+  if (!rankings.length) {
+    html += '<div class="text-sm" style="color:var(--text3);padding:8px 0;">暂无数据</div>';
+  } else {
+    rankings.slice(0,10).forEach(function(item, i) {
+      var badge = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+      html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--gray2);' + (i===0?'background:#fafff0;margin:0 -14px;padding:6px 14px;border-radius:6px 6px 0 0;':'') + '">' +
+        '<div style="width:24px;text-align:center;font-size:13px;font-weight:700;color:' + (i<3?'#888':'var(--text3)') + ';">' + (i+1) + '</div>' +
+        '<div style="font-size:15px;font-weight:500;flex:1;">' + badge + ' ' + item.name + '</div>' +
+        '<div style="font-size:13px;color:var(--text2);"><span style="font-weight:700;color:var(--primary);">' + item.points + '</span> 分</div></div>';
+    });
+  }
+  html += '<div style="margin-top:8px;"><button class="btn btn-outline btn-sm" onclick="openTournament(\'' + t.id + '\')">查看完整排名 ›</button></div></div>';
+  return html;
+}
+
+function openTournament(id) {
+  activateTournament(id);
+  // 重置管理员状态（按页面刷新处理，每次打开重新验证）
+  isAdminMode = !state.adminCode; // 无密码默认管理员
+  updateAdminBadge();
+  if (state && state.started) {
+    // 已开始的比赛直接进比赛视图
+    showMatchView();
+    switchTab('game');
+  } else if (state && state.adminCode && !isAdminMode) {
+    // 有密码且未登录 → 先去登录页
+    showLoginPage();
+  } else {
+    // 无密码 或 已登录（无密码赛事） → 去设置页
+    showSetupDetailPage();
+  }
+}
+
+function createTournamentFromList() {
+  // 打开新建赛事弹窗，预填当前时间
+  var now = new Date();
+  var pad = function(n) { return n < 10 ? '0' + n : n; };
+  var nowStr = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate()) + 'T' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+  // 默认比赛时间：明天同一时间
+  var tomorrow = new Date(now.getTime() + 86400000);
+  var tomorrowStr = tomorrow.getFullYear() + '-' + pad(tomorrow.getMonth()+1) + '-' + pad(tomorrow.getDate()) + 'T' + pad(tomorrow.getHours()) + ':' + pad(tomorrow.getMinutes());
+  document.getElementById('createTourName').value = '比赛 ' + (data.tournaments.length + 1);
+  document.getElementById('createTourCreatedAt').value = nowStr;
+  document.getElementById('createTourMatchTime').value = tomorrowStr;
+  document.getElementById('createTourModal').classList.add('show');
+  setTimeout(function() { document.getElementById('createTourName').focus(); document.getElementById('createTourName').select(); }, 100);
+}
+
+function closeCreateTourModal() {
+  document.getElementById('createTourModal').classList.remove('show');
+}
+
+function confirmCreateTour() {
+  var name = document.getElementById('createTourName').value.trim() || '未命名赛事';
+  var createdAtStr = document.getElementById('createTourCreatedAt').value;
+  var matchTimeStr = document.getElementById('createTourMatchTime').value;
+  var adminCode = document.getElementById('createTourAdminCode').value.trim() || null;
+  var createdAt = createdAtStr ? new Date(createdAtStr).toISOString() : new Date().toISOString();
+  var matchTime = matchTimeStr ? new Date(matchTimeStr).toISOString() : null;
+  var t = {
+    id: 't_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+    name: name,
+    createdAt: createdAt,
+    matchTime: matchTime,
+    format: 'rotation',
+    groupType: 'doubles',
+    players: ['', '', '', ''],
+    rounds: [],
+    currentRound: 0,
+    started: false,
+    finished: false,
+    scoreMode: 'score',
+    pointsRule: '3-1',
+    courts: 2,
+    adminCode: adminCode,
+    fixedPairs: [],
+  };
+  data.tournaments.push(t);
+  saveData();
+  closeCreateTourModal();
+  activateTournament(t.id);
+  // 新建赛事默认本人为管理员（无密码则直接管理员，有密码则去登录页）
+  isAdminMode = !adminCode;
+  updateAdminBadge();
+  if (adminCode) {
+    showLoginPage();
+  } else {
+    showSetupDetailPage();
+  }
+  toast('已创建：' + name);
+}
+
+function deleteTournamentFromList(id) {
+  var t = data.tournaments.find(function(x) { return x.id === id; });
+  if (!t) return;
+  if (!confirm('确认删除赛事「' + t.name + '」？\n此操作不可撤销。')) return;
+  data.tournaments = data.tournaments.filter(function(x) { return x.id !== id; });
+  if (data.activeId === id) {
+    data.activeId = data.tournaments.length ? data.tournaments[0].id : null;
+    state = data.activeId ? data.tournaments.find(function(t) { return t.id === data.activeId; }) : null;
+  }
+  saveData();
+  if (currentListTab === 'events') {
+    renderTournamentListPage();
+  } else if (currentListTab === 'schedule') {
+    renderListSchedule();
+  } else if (currentListTab === 'results') {
+    renderListResults();
+  }
+  toast('已删除：' + t.name);
+}
+
+// =================== SETUP DETAIL PAGE ===================
+function renderSetupDetailPage() {
+  if (!state) { showListPage(); return; }
+  document.getElementById('setupDetailTitle').textContent = state.name || '比赛设置';
+  // 重用原 setupContent 的内容构建逻辑
+  var cont = document.getElementById('setupDetailContent');
+
+  // 管理员密码解锁入口
+  var adminBanner = '';
+  if (state.adminCode && !isAdmin()) {
+    adminBanner =
+      '<div style="background:rgba(255,200,0,0.12);border:1px solid rgba(255,200,0,0.35);border-radius:var(--radius);padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">' +
+        '<span style="font-size:18px;">🔒</span>' +
+        '<div style="flex:1;">' +
+          '<div style="font-size:13px;font-weight:600;color:#FFD700;">管理员权限模式</div>' +
+          '<div style="font-size:11px;color:rgba(255,255,255,0.55);margin-top:1px;">当前为观众模式，无法录入比分</div>' +
+        '</div>' +
+        '<button class="btn btn-sm" style="background:#FFD700;color:#333;font-weight:600;" onclick="requireAdmin(null)">🔓 输入密码</button>' +
+      '</div>';
+  } else if (state.adminCode && isAdmin()) {
+    adminBanner =
+      '<div style="background:rgba(0,200,100,0.12);border:1px solid rgba(0,200,100,0.3);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px;font-size:12px;color:#00c864;">' +
+        '✅ 已验证管理员身份，可正常录入比分' +
+      '</div>';
+  }
+
+  // 状态提示
+  var statusBanner = '';
+  if (!state.started) {
+    statusBanner =
+      '<div style="background:rgba(100,150,255,0.1);border:1px solid rgba(100,150,255,0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;font-size:12px;color:rgba(255,255,255,0.7);">' +
+        '<span style="color:#88aaff;">📋</span> 赛事待开始 — 请先完善「参赛选手」和「赛制设置」，确认无误后点击下方「开始比赛」按钮。' +
+      '</div>';
+  }
+
+  cont.innerHTML =
+    adminBanner +
+    statusBanner +
+    '<div class="card">' +
+      '<div class="card-title"><span class="dot"></span>比赛名称</div>' +
+      '<input class="player-input" id="tourTitleInputSD" value="' + (state.name||'') + '" placeholder="输入比赛名称" style="margin-bottom:12px;" oninput="renameTournamentSD(this.value)">' +
+    '</div>' +
+    '<div class="card">' +
+      '<div class="card-title"><span class="dot"></span>参赛选手</div>' +
+      '<div class="player-list" id="playerListSD"></div>' +
+      '<div class="btn-row mt12">' +
+        '<button class="btn btn-outline btn-sm" onclick="addPlayerSD()">+ 添加选手</button>' +
+        '<button class="btn btn-secondary btn-sm" onclick="clearPlayersSD()">清空</button>' +
+        '<button class="btn btn-secondary btn-sm" onclick="loadDemoSD()">载入示例</button>' +
+      '</div>' +
+      '<div class="text-sm mt8" id="playerCountSD">当前 0 人</div>' +
+    '</div>' +
+    '<div class="card">' +
+      '<div class="card-title"><span class="dot"></span>赛制设置</div>' +
+      '<div class="setup-row">' +
+        '<span class="setup-label">比赛赛制</span>' +
+        '<select id="formatSelectSD" onchange="onFormatChangeSD()">' +
+          '<option value="rotation">轮转搭档赛（原模式）</option>' +
+          '<option value="group">小组赛（循环赛）</option>' +
+        '</select>' +
+      '</div>' +
+      '<div class="setup-row" id="groupTypeRowSD" style="display:none;">' +
+        '<span class="setup-label">小组赛类型</span>' +
+        '<select id="groupTypeSelectSD" onchange="onGroupTypeChangeSD()">' +
+          '<option value="singles">单打（每人各自为战）</option>' +
+          '<option value="doubles">双打（2人一队）</option>' +
+        '</select>' +
+      '</div>' +
+      '<div id="rotationSettingsSD">' +
+      '<div class="setup-row">' +
+        '<span class="setup-label">场地数量</span>' +
+        '<select id="courtsCountSD">' +
+          '<option value="1">1 块场地（每轮1场）</option>' +
+          '<option value="2">2 块场地（每轮2场同时）</option>' +
+          '<option value="3">3 块场地（每轮3场同时）</option>' +
+          '<option value="4">4 块场地（每轮4场同时）</option>' +
+        '</select>' +
+      '</div>' +
+      '<div class="setup-row">' +
+        '<span class="setup-label">比赛轮数</span>' +
+        '<select id="roundsCountSD">' +
+          '<option value="auto">自动（搭档不重复优先）</option>' +
+          '<option value="3">3轮</option>' +
+          '<option value="4">4轮</option>' +
+          '<option value="5">5轮</option>' +
+          '<option value="6">6轮</option>' +
+          '<option value="8">8轮</option>' +
+          '<option value="10">10轮</option>' +
+        '</select>' +
+      '</div>' +
+      '</div>' +
+      '<div id="groupSettingsSD" style="display:none;">' +
+      '<div class="setup-row">' +
+        '<span class="setup-label">场地数量</span>' +
+        '<select id="groupCourtsCountSD">' +
+          '<option value="1">1 块场地（每轮1场）</option>' +
+          '<option value="2">2 块场地（每轮2场同时）</option>' +
+          '<option value="3">3 块场地（每轮3场同时）</option>' +
+          '<option value="4">4 块场地（每轮4场同时）</option>' +
+        '</select>' +
+      '</div>' +
+      '<div id="fixedPairSectionSD" style="display:none;">' +
+        '<div class="fixed-pair-card">' +
+          '<div class="card-title"><span class="dot"></span>固定搭档配置</div>' +
+          '<div class="fixed-pair-hint">设置后，同一搭档的两位选手将始终配对在一起进行比赛</div>' +
+          '<div class="fixed-pair-list" id="fixedPairListSD"></div>' +
+          '<div class="fixed-pair-plus">' +
+            '<select class="player-select-pair" id="fpPlayer1SD"><option value="">选择选手</option></select>' +
+            '<span class="vs-tag">&</span>' +
+            '<select class="player-select-pair" id="fpPlayer2SD"><option value="">选择选手</option></select>' +
+            '<button class="btn btn-outline btn-sm" onclick="addFixedPairSD()">+ 添加搭档</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="text-sm mt8" id="groupHintSD" style="color:var(--text3);"></div>' +
+      '</div>' +
+      '<div class="setup-row">' +
+        '<span class="setup-label">计分制</span>' +
+        '<select id="scoreModeSD">' +
+          '<option value="winloss">只记胜负（积分制）</option>' +
+          '<option value="score">记录比分（11分制）</option>' +
+        '</select>' +
+      '</div>' +
+      '<div class="setup-row">' +
+        '<span class="setup-label">积分规则</span>' +
+        '<select id="pointsRuleSD">' +
+          '<option value="3-0">胜3分 / 负0分</option>' +
+          '<option value="3-1">胜3分 / 负1分</option>' +
+          '<option value="2-0">胜2分 / 负0分</option>' +
+        '</select>' +
+      '</div>' +
+      '<div class="text-sm" id="setupHintSD" style="color:var(--text3);margin-top:4px;"></div>' +
+    '</div>' +
+    '<div class="card">' +
+      '<div class="card-title"><span class="dot"></span>🔐 管理员设置</div>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;">' +
+        '<div>' +
+          '<div style="font-size:14px;font-weight:500;">管理员密码</div>' +
+          '<div class="text-sm" id="adminCodeStatusSD" style="margin-top:2px;">' + (state.adminCode ? '已设置' : '未设置（所有人可编辑）') + '</div>' +
+        '</div>' +
+        '<button class="btn btn-outline btn-sm" onclick="openAdminSettings()">' + (state.adminCode ? '修改密码' : '设置密码') + '</button>' +
+      '</div>' +
+      '<div class="text-sm" style="color:var(--text3);margin-top:4px;line-height:1.4;">设置密码后，只有输入密码的管理员才能录入比分，其他人只能查看。</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:10px;margin-top:4px;">' +
+      '<button class="btn btn-secondary" style="flex:1;" onclick="saveSettingsOnly()">💾 保存设置</button>' +
+      '<button class="btn btn-primary" style="flex:1;" onclick="startGameFromSetup()">▶ 开始比赛</button>' +
+    '</div>';
+
+  // 填入当前值
+  document.getElementById('formatSelectSD').value = state.format || 'rotation';
+  document.getElementById('groupTypeSelectSD').value = state.groupType || 'doubles';
+  var c = state.courts || 2;
+  document.getElementById('courtsCountSD').value = String(c);
+  document.getElementById('groupCourtsCountSD').value = String(c);
+  document.getElementById('scoreModeSD').value = state.scoreMode || 'score';
+  document.getElementById('pointsRuleSD').value = state.pointsRule || '3-1';
+
+  // 赛制显示
+  _applyFormatVisibilitySD();
+  renderPlayerListSD();
+  updatePlayerCountSD();
+
+  // 绑定 change 事件
+  document.getElementById('courtsCountSD').addEventListener('change', function() {
+    state.courts = parseInt(this.value); saveData(); updatePlayerCountSD();
+  });
+  document.getElementById('groupCourtsCountSD').addEventListener('change', function() {
+    state.courts = parseInt(this.value); saveData(); updatePlayerCountSD();
+  });
+  document.getElementById('scoreModeSD').addEventListener('change', function() {
+    state.scoreMode = this.value; saveData();
+  });
+  document.getElementById('pointsRuleSD').addEventListener('change', function() {
+    state.pointsRule = this.value; saveData();
+  });
+}
+
+function renameTournamentSD(val) {
+  if (!state) return;
+  state.name = val;
+  saveData();
+  document.getElementById('setupDetailTitle').textContent = val || '比赛设置';
+  syncHeader();
+}
+
+function renderPlayerListSD() {
+  var list = document.getElementById('playerListSD');
+  if (!list || !state) return;
+  list.innerHTML = '';
+  (state.players || []).forEach(function(p, i) {
+    var row = document.createElement('div');
+    row.className = 'player-row';
+    row.innerHTML = '<div class="player-num">' + (i+1) + '</div>' +
+      '<input class="player-input" type="text" value="' + (p||'') + '" placeholder="选手 ' + (i+1) + ' 姓名" oninput="state.players[' + i + ']=this.value;saveData();updatePlayerCountSD();_syncFixedPairSelectsSD()">' +
+      '<button class="btn-del" onclick="removePlayerSD(' + i + ')">×</button>';
+    list.appendChild(row);
+  });
+  updatePlayerCountSD();
+}
+
+function addPlayerSD() {
+  if (!state) return;
+  var valid = (state.players || []).filter(function(p) { return p && p.trim(); }).length;
+  if (valid >= 16) { toast('最多支持16人参赛'); return; }
+  state.players.push('');
+  saveData();
+  renderPlayerListSD();
+  _syncFixedPairSelectsSD();
+  setTimeout(function() {
+    var inputs = document.querySelectorAll('#playerListSD .player-input');
+    if (inputs.length > 0) inputs[inputs.length-1].focus();
+  }, 50);
+}
+
+function removePlayerSD(i) {
+  if (!state) return;
+  if ((state.players||[]).length <= 1) { toast('至少保留1名选手'); return; }
+  state.players.splice(i, 1);
+  saveData();
+  renderPlayerListSD();
+  _syncFixedPairSelectsSD();
+}
+
+function clearPlayersSD() {
+  if (state) { state.players = ['']; saveData(); renderPlayerListSD(); _syncFixedPairSelectsSD(); }
+}
+
+function loadDemoSD() {
+  if (!state) return;
+  state.players = ['张三','李四','王五','赵六','陈七','刘八','孙九','周十'];
+  document.getElementById('courtsCountSD').value = '2';
+  state.courts = 2;
+  saveData();
+  renderPlayerListSD();
+  _syncFixedPairSelectsSD();
+  toast('已载入示例');
+}
+
+function updatePlayerCountSD() {
+  var el = document.getElementById('playerCountSD');
+  if (!el || !state) return;
+  var valid = (state.players || []).filter(function(p) { return p && p.trim(); }).length;
+  var fmt = state.format || 'rotation';
+  var courts = state.courts || 2;
+  el.textContent = '当前 ' + valid + ' 人';
+  if (fmt === 'rotation') {
+    if (valid < 5) { el.style.color = 'var(--accent)'; el.textContent += '（轮转赛至少需要5人）'; }
+    else { el.style.color = 'var(--primary)'; }
+    if (courts > 1) {
+      var canFull = Math.floor(valid / 4);
+      var actualCourts = Math.min(courts, canFull);
+      var hintEl = document.getElementById('setupHintSD');
+      if (hintEl) hintEl.textContent = valid + '人 · ' + courts + '场地 → 每轮上场 ' + (actualCourts*4) + ' 人，候场 ' + (valid - actualCourts*4) + ' 人';
+    }
+  } else {
+    var gt = state.groupType || 'doubles';
+    if (gt === 'singles') {
+      if (valid < 2) { el.style.color = 'var(--accent)'; el.textContent += '（单打至少需要2人）'; }
+      else { el.style.color = 'var(--primary)'; }
+    } else {
+      if (valid < 4) { el.style.color = 'var(--accent)'; el.textContent += '（双打至少需要4人）'; }
+      else { el.style.color = 'var(--primary)'; }
+    }
+  }
+}
+
+function onFormatChangeSD() {
+  if (!state) return;
+  state.format = document.getElementById('formatSelectSD').value;
+  state.groupType = document.getElementById('groupTypeSelectSD').value;
+  saveData();
+  _applyFormatVisibilitySD();
+  updatePlayerCountSD();
+}
+
+function onGroupTypeChangeSD() {
+  if (!state) return;
+  state.groupType = document.getElementById('groupTypeSelectSD').value;
+  saveData();
+  updatePlayerCountSD();
+}
+
+function _applyFormatVisibilitySD() {
+  var fmt = document.getElementById('formatSelectSD').value;
+  document.getElementById('groupTypeRowSD').style.display = fmt === 'group' ? '' : 'none';
+  document.getElementById('rotationSettingsSD').style.display = fmt === 'group' ? 'none' : '';
+  document.getElementById('groupSettingsSD').style.display = fmt === 'group' ? '' : 'none';
+  // 固定搭档只对双打小组赛显示
+  var gt = state.groupType || 'doubles';
+  var showFP = fmt === 'group' && gt === 'doubles';
+  var fpSection = document.getElementById('fixedPairSectionSD');
+  if (fpSection) fpSection.style.display = showFP ? '' : 'none';
+  if (showFP) renderFixedPairsSD();
+}
+
+// =================== FIXED PAIRS ===================
+function renderFixedPairsSD() {
+  if (!state) return;
+  var list = document.getElementById('fixedPairListSD');
+  var p1Select = document.getElementById('fpPlayer1SD');
+  var p2Select = document.getElementById('fpPlayer2SD');
+  if (!list) return;
+
+  // 渲染已添加的搭档
+  var pairs = state.fixedPairs || [];
+  if (pairs.length === 0) {
+    list.innerHTML = '<div class="fixed-pair-empty">暂未设置固定搭档<br><span style="font-size:11px;">系统将自动生成搭档配对</span></div>';
+  } else {
+    list.innerHTML = '';
+    pairs.forEach(function(pair, idx) {
+      var row = document.createElement('div');
+      row.className = 'fixed-pair-row';
+      row.innerHTML = '<span class="pair-num">' + (idx+1) + '</span>' +
+        '<span class="pair-label"><span class="teammate">' + (pair[0]||'?') + '</span> & <span class="teammate">' + (pair[1]||'?') + '</span></span>' +
+        '<button class="btn-del" onclick="removeFixedPairSD(' + idx + ')">×</button>';
+      list.appendChild(row);
+    });
+  }
+
+  // 更新选手选择下拉框（排除已被搭档的用户）
+  var allPlayers = (state.players || []).filter(function(p){return p&&p.trim();});
+  var pairedPlayers = new Set();
+  pairs.forEach(function(pair) { pairedPlayers.add(pair[0]); pairedPlayers.add(pair[1]); });
+
+  // 构建排除自身的下拉选项
+  function buildOptions(excludeName) {
+    var opts = '<option value="">选择选手</option>';
+    allPlayers.forEach(function(p) {
+      if (p !== excludeName && !pairedPlayers.has(p)) {
+        opts += '<option value="' + p + '">' + p + '</option>';
+      }
+    });
+    return opts;
+  }
+
+  if (p1Select) p1Select.innerHTML = buildOptions('');
+  if (p2Select) p2Select.innerHTML = buildOptions('');
+}
+
+// 仅更新固定搭档下拉框选项（不重绘已添加列表），用于选手输入实时同步
+function _syncFixedPairSelectsSD() {
+  var fpSection = document.getElementById('fixedPairSectionSD');
+  if (!fpSection || fpSection.style.display === 'none') return;
+  if (!state) return;
+  var p1Select = document.getElementById('fpPlayer1SD');
+  var p2Select = document.getElementById('fpPlayer2SD');
+  if (!p1Select || !p2Select) return;
+  var allPlayers = (state.players || []).filter(function(p){return p&&p.trim();});
+  var pairs = state.fixedPairs || [];
+  var pairedPlayers = new Set();
+  pairs.forEach(function(pair) { pairedPlayers.add(pair[0]); pairedPlayers.add(pair[1]); });
+  function buildOpts(excludeName) {
+    var opts = '<option value="">选择选手</option>';
+    allPlayers.forEach(function(p) {
+      if (p !== excludeName && !pairedPlayers.has(p)) {
+        opts += '<option value="' + p + '">' + p + '</option>';
+      }
+    });
+    return opts;
+  }
+  var cur1 = p1Select.value;
+  var cur2 = p2Select.value;
+  p1Select.innerHTML = buildOpts('');
+  p2Select.innerHTML = buildOpts('');
+  // 尽量保留已选中的值
+  p1Select.value = cur1;
+  p2Select.value = cur2;
+}
+
+function addFixedPairSD() {
+  if (!state) return;
+  var p1 = document.getElementById('fpPlayer1SD');
+  var p2 = document.getElementById('fpPlayer2SD');
+  if (!p1 || !p2) return;
+  var name1 = p1.value.trim();
+  var name2 = p2.value.trim();
+  if (!name1 || !name2) { toast('请选择两位选手'); return; }
+  if (name1 === name2) { toast('搭档不能是同一人'); return; }
+
+  // 检查是否重复
+  var pairs = state.fixedPairs || [];
+  var exists = pairs.some(function(pair) {
+    return (pair[0]===name1&&pair[1]===name2) || (pair[0]===name2&&pair[1]===name1);
+  });
+  if (exists) { toast('此搭档组合已存在'); return; }
+
+  pairs.push([name1, name2]);
+  state.fixedPairs = pairs;
+  saveData();
+  renderFixedPairsSD();
+  toast('已添加搭档：' + name1 + ' & ' + name2);
+}
+
+function removeFixedPairSD(idx) {
+  if (!state) return;
+  var pairs = state.fixedPairs || [];
+  if (idx < 0 || idx >= pairs.length) return;
+  var removed = pairs.splice(idx, 1);
+  state.fixedPairs = pairs;
+  saveData();
+  renderFixedPairsSD();
+  toast('已移除搭档：' + removed[0][0] + ' & ' + removed[0][1]);
+}
+
+function onGroupTypeChangeSD() {
+  if (!state) return;
+  state.groupType = document.getElementById('groupTypeSelectSD').value;
+  saveData();
+  // 固定搭档只对双打显示
+  var fpSection = document.getElementById('fixedPairSectionSD');
+  if (fpSection) fpSection.style.display = state.groupType === 'doubles' ? '' : 'none';
+  if (state.groupType === 'doubles') renderFixedPairsSD();
+  updatePlayerCountSD();
+}
+
+// 保存设置（不开始比赛）
+function saveSettingsOnly() {
+  if (!state) return;
+  // 从 DOM 读取选手列表并保存
+  var inputs = document.querySelectorAll('#playerListSD .player-input');
+  if (inputs.length) {
+    state.players = Array.from(inputs).map(function(inp) { return inp.value.trim(); }).filter(Boolean);
+  }
+  // 保存当前格式设置
+  var fmtEl = document.getElementById('formatSelectSD');
+  var gtEl = document.getElementById('groupTypeSelectSD');
+  var gcEl = document.getElementById('groupCourtsCountSD');
+  if (fmtEl) state.format = fmtEl.value;
+  if (gtEl) state.groupType = gtEl.value;
+  if (gcEl) state.courts = parseInt(gcEl.value) || 2;
+  saveData();
+  toast('设置已保存');
+  showListPage();
+}
+
+function startGameFromSetup() {
+  // 从设置页点击"开始比赛"
+  startGame();
+}
+
+function renameTournament(id, newName) {
+  var t = data.tournaments.find(function(x) { return x.id === id; });
+  if (t) { t.name = newName; saveData(); syncHeader(); }
+}
+
+// =================== TOAST ===================
+var toastTimer;
+function toast(msg) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function() { el.classList.remove('show'); }, 2400);
+}
+
+// =================== TABS ===================
+function switchTab(tab) {
+  showMatchView();
+  document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+  document.querySelectorAll('#matchView .page').forEach(function(p) { p.classList.remove('active'); });
+  var btn = document.querySelector('[data-tab="' + tab + '"]');
+  if (btn) btn.classList.add('active');
+  var pg = document.getElementById('page-' + tab);
+  if (pg) pg.classList.add('active');
+  if (tab === 'game') renderGame();
+  if (tab === 'schedule') renderSchedule();
+  if (tab === 'reg') renderRegPage();
+  if (tab === 'rank') renderRank();
+  syncHeader();
+}
+// =================== GROUP STAGE ALGORITHM ===================
+// state.format = 'group' 时使用此算法，支持单打/双打循环赛
+function generateGroupSchedule(players, courts, groupType) {
+  var n = players.length;
+  if (groupType === 'singles') {
+    return generateSinglesRR(players, courts);
+  } else {
+    return generateDoublesRR(players, courts);
+  }
+}
+
+// 单打循环赛：每人轮流对战其他所有人
+function generateSinglesRR(players, courts) {
+  var n = players.length;
+  var allMatches = [];
+  for (var i = 0; i < n; i++) {
+    for (var j = i + 1; j < n; j++) {
+      allMatches.push({ teamA: [players[i]], teamB: [players[j]], scoreA: null, scoreB: null, done: false });
+    }
+  }
+  return scheduleMatchesIntoRounds(allMatches, courts, players);
+}
+
+// 双打循环赛：支持固定搭档，每对轮流对战其他所有对
+function generateDoublesRR(players, courts) {
+  var n = players.length;
+  if (n < 4) return [];
+  var fixedPairs = (state && state.fixedPairs) ? state.fixedPairs : [];
+
+  if (fixedPairs.length > 0) {
+    // 使用固定搭档模式
+    return generateDoublesRRWithFixed(players, courts, fixedPairs);
+  } else {
+    // 自动配对模式（原逻辑）
+    var pairs = generateRingPairs(players);
+    if (pairs.length < 2) return [];
+    var allMatches = [];
+    for (var i = 0; i < pairs.length; i++) {
+      for (var j = i + 1; j < pairs.length; j++) {
+        allMatches.push({ teamA: pairs[i], teamB: pairs[j], scoreA: null, scoreB: null, done: false });
+      }
+    }
+    return scheduleMatchesIntoRounds(allMatches, courts, players);
+  }
+}
+
+// 固定搭档双打循环赛
+// 固定搭档内部成员固定为一队，队与队之间循环对战
+function generateDoublesRRWithFixed(players, courts, fixedPairs) {
+  var validPairs = fixedPairs.filter(function(p) {
+    return p[0] && p[0].trim() && p[1] && p[1].trim();
+  });
+  if (validPairs.length < 2) {
+    toast('固定搭档至少需要2对才能进行比赛');
+    return [];
+  }
+
+  // 找出未配对的选手
+  var pairedPlayers = new Set();
+  validPairs.forEach(function(p) { pairedPlayers.add(p[0]); pairedPlayers.add(p[1]); });
+  var unpaired = players.filter(function(p) { return !pairedPlayers.has(p); });
+
+  // 如果有未配对选手，自动两两配对（尽量凑偶数）
+  var allPairs = validPairs.map(function(p) { return [p[0].trim(), p[1].trim()]; });
+  for (var i = 0; i + 1 < unpaired.length; i += 2) {
+    allPairs.push([unpaired[i].trim(), unpaired[i+1].trim()]);
+  }
+
+  var totalTeams = allPairs.length;
+  var allMatches = [];
+  for (var i = 0; i < totalTeams; i++) {
+    for (var j = i + 1; j < totalTeams; j++) {
+      var teamAName = allPairs[i].join(' / ');
+      var teamBName = allPairs[j].join(' / ');
+      allMatches.push({
+        teamA: allPairs[i],
+        teamB: allPairs[j],
+        teamAName: teamAName,
+        teamBName: teamBName,
+        scoreA: null,
+        scoreB: null,
+        done: false
+      });
+    }
+  }
+  // 显示信息
+  var pairInfo = '固定搭档 ' + validPairs.length + ' 对';
+  if (unpaired.length > 0) {
+    pairInfo += ' + 自动配对 ' + Math.floor(unpaired.length / 2) + ' 对';
+  }
+  toast(pairInfo + '，共 ' + totalTeams + ' 队，约 ' + allMatches.length + ' 场比赛');
+
+  return scheduleMatchesIntoRounds(allMatches, courts, players);
+}
+
+// Ring method 配对：环形排列对折配对，生成多对搭档（每人每次搭档不同）
+// n=8: 生成21对（每人搭档3次）→ 队循环赛共 21 场
+// n=6: 生成15对（每人搭档4次）→ 队循环赛共 105 场（过多），取前 30 场
+function generateRingPairs(players) {
+  var pool = players.slice();
+  if (pool.length % 2 !== 0) { pool.push('轮空'); } // 凑偶数
+  var m = pool.length;
+  var allPairs = [];
+  for (var r = 0; r < m - 1; r++) {
+    for (var i = 0; i < m / 2; i++) {
+      var a = pool[(i + r) % m];
+      var b = pool[(m - 1 - i + r) % m];
+      if (a !== '轮空' && b !== '轮空' && a !== b) {
+        allPairs.push([a, b]);
+      }
+    }
+  }
+  // 去重（同一对组合只保留第一次出现）
+  var seen = new Set();
+  var unique = [];
+  allPairs.forEach(function(p) {
+    var key = [p[0], p[1]].sort().join('||');
+    if (!seen.has(key)) { seen.add(key); unique.push(p); }
+  });
+  // 限制搭档对数量，防止组合爆炸（最多取 20 对，即 190 场比赛约 95 轮）
+  if (unique.length > 20) { unique = unique.slice(0, 20); }
+  return unique;
+}
+
+// 将所有比赛分配到轮次，每轮最多并行 courts 场
+function scheduleMatchesIntoRounds(allMatches, courts, allPlayers) {
+  var schedule = [];
+  var idx = 0;
+  var total = allMatches.length;
+  var roundNum = 1;
+  // 计算候场人数（适用于双打有余数的情况）
+  var playerInMatch = new Set();
+  while (idx < total) {
+    var roundMatches = [];
+    var usedPlayers = new Set();
+    for (var c = 0; c < courts && idx < total; c++) {
+      var m = allMatches[idx];
+      var aOk = !usedPlayers.has(m.teamA[0]);
+      var bOk = m.teamA.length > 1 ? (!usedPlayers.has(m.teamA[1])) : true;
+      var a2Ok = !usedPlayers.has(m.teamB[0]);
+      var b2Ok = m.teamA.length > 1 ? (!usedPlayers.has(m.teamB[1])) : true;
+      if (m.teamA.length === 1) {
+        aOk = !usedPlayers.has(m.teamA[0]);
+        a2Ok = !usedPlayers.has(m.teamB[0]);
+      } else {
+        aOk = !usedPlayers.has(m.teamA[0]);
+        bOk = !usedPlayers.has(m.teamA[1]);
+        a2Ok = !usedPlayers.has(m.teamB[0]);
+        b2Ok = !usedPlayers.has(m.teamB[1]);
+      }
+      var conflict = false;
+      if (m.teamA.length === 1) {
+        if (usedPlayers.has(m.teamA[0]) || usedPlayers.has(m.teamB[0])) conflict = true;
+      } else {
+        if (usedPlayers.has(m.teamA[0]) || usedPlayers.has(m.teamA[1]) ||
+            usedPlayers.has(m.teamB[0]) || usedPlayers.has(m.teamB[1])) conflict = true;
+      }
+      if (conflict) break;
+      if (m.teamA.length === 1) {
+        usedPlayers.add(m.teamA[0]); usedPlayers.add(m.teamB[0]);
+      } else {
+        usedPlayers.add(m.teamA[0]); usedPlayers.add(m.teamA[1]);
+        usedPlayers.add(m.teamB[0]); usedPlayers.add(m.teamB[1]);
+      }
+      roundMatches.push({ court: c + 1, teamA: m.teamA, teamB: m.teamB, scoreA: null, scoreB: null, done: false });
+      idx++;
+    }
+    // 候场者
+    var waiting = allPlayers.filter(function(p) { return !usedPlayers.has(p); });
+    schedule.push({ round: roundNum++, matches: roundMatches, waiting: waiting });
+    // 防止死循环
+    if (roundMatches.length === 0) break;
+  }
+  return schedule;
+}
+
+// =================== ALGORITHM ===================
+function generateSchedule(players, courts, roundsCount) {
+  var n = players.length;
+  var maxMatchesPerRound = Math.min(courts, Math.floor(n / 4));
+  if (maxMatchesPerRound === 0) return [];
+
+  var allPairs = [];
+  for (var i = 0; i < n; i++) {
+    for (var j = i+1; j < n; j++) {
+      allPairs.push([players[i], players[j]]);
+    }
+  }
+
+  var targetRounds;
+  if (roundsCount === 'auto') {
+    targetRounds = Math.ceil(allPairs.length / (2 * maxMatchesPerRound));
+    targetRounds = Math.min(Math.max(targetRounds, 3), 20);
+  } else {
+    targetRounds = parseInt(roundsCount);
+  }
+
+  var schedule = [];
+  var byeCount = {};
+  players.forEach(function(p) { byeCount[p] = 0; });
+
+  var pairPool = allPairs.slice();
+  var usedPairs = new Set();
+
+  function pairKey(a, b) { return [a,b].sort().join('|||'); }
+
+  function pickMatches(count) {
+    var result = [];
+    var usedPlayers = new Set();
+    function filterAvailable(pool) {
+      return pool.filter(function(p) { return !usedPlayers.has(p[0]) && !usedPlayers.has(p[1]); });
+    }
+    for (var c = 0; c < count; c++) {
+      var available = filterAvailable(pairPool.filter(function(p) { return !usedPairs.has(pairKey(p[0], p[1])); }));
+      if (available.length < 2) {
+        available = filterAvailable(pairPool);
+      }
+      if (available.length < 2) {
+        pairPool = allPairs.slice();
+        usedPairs.clear();
+        available = filterAvailable(pairPool);
+      }
+      if (available.length < 2) break;
+      var matchFound = false;
+      outer:
+      for (var ai = 0; ai < available.length; ai++) {
+        var pa = available[ai];
+        if (usedPlayers.has(pa[0]) || usedPlayers.has(pa[1])) continue;
+        for (var bi = ai+1; bi < available.length; bi++) {
+          var pb = available[bi];
+          if (usedPlayers.has(pb[0]) || usedPlayers.has(pb[1])) continue;
+          if (pa[0]===pb[0]||pa[0]===pb[1]||pa[1]===pb[0]||pa[1]===pb[1]) continue;
+          result.push({ teamA: pa, teamB: pb });
+          usedPlayers.add(pa[0]); usedPlayers.add(pa[1]);
+          usedPlayers.add(pb[0]); usedPlayers.add(pb[1]);
+          usedPairs.add(pairKey(pa[0], pa[1]));
+          usedPairs.add(pairKey(pb[0], pb[1]));
+          var idxA = pairPool.findIndex(function(p) { return p[0]===pa[0]&&p[1]===pa[1]; });
+          var idxB = pairPool.findIndex(function(p) { return p[0]===pb[0]&&p[1]===pb[1]; });
+          [idxA, idxB].sort(function(a,b){return b-a;}).forEach(function(idx) { if(idx>=0) pairPool.splice(idx,1); });
+          matchFound = true;
+          break outer;
+        }
+      }
+      if (!matchFound) break;
+    }
+    return result;
+  }
+
+  for (var r = 0; r < targetRounds; r++) {
+    var matches = pickMatches(maxMatchesPerRound);
+    if (!matches.length) break;
+    var playingSet = new Set();
+    matches.forEach(function(m) { m.teamA.forEach(function(p){playingSet.add(p);}); m.teamB.forEach(function(p){playingSet.add(p);}); });
+    var waiting = players.filter(function(p) { return !playingSet.has(p); });
+    waiting.forEach(function(p) { byeCount[p]++; });
+    schedule.push({
+      round: r+1,
+      matches: matches.map(function(m, ci) { return { court: ci+1, teamA: m.teamA, teamB: m.teamB, scoreA: null, scoreB: null, done: false }; }),
+      waiting: waiting,
+    });
+  }
+  return schedule;
+}
+
+// =================== START ===================
+function startGame() {
+  if (!state) return;
+  // 从 SD 版本的 DOM 读取选手列表
+  var inputs = document.querySelectorAll('#playerListSD .player-input');
+  if (inputs.length) {
+    state.players = Array.from(inputs).map(function(inp) { return inp.value.trim(); }).filter(Boolean);
+  }
+  state.format = state.format || 'rotation';
+  // 读取计分设置（SD 版本）
+  var smEl = document.getElementById('scoreModeSD');
+  var prEl = document.getElementById('pointsRuleSD');
+  if (smEl) state.scoreMode = smEl.value;
+  if (prEl) state.pointsRule = prEl.value;
+
+  if (state.format === 'rotation') {
+    if (state.players.length < 5) { toast('轮转搭档赛至少需要5名选手'); return; }
+    var courtsEl = document.getElementById('courtsCountSD');
+    var roundsEl = document.getElementById('roundsCountSD');
+    var courts = courtsEl ? parseInt(courtsEl.value) : (state.courts || 2);
+    var roundsCount = roundsEl ? roundsEl.value : 'auto';
+    state.courts = courts;
+    state.rounds = generateSchedule(state.players, courts, roundsCount);
+  } else if (state.format === 'group') {
+    state.groupType = state.groupType || 'doubles';
+    var gcEl = document.getElementById('groupCourtsCountSD');
+    var gc = gcEl ? (parseInt(gcEl.value) || 2) : (state.courts || 2);
+    state.courts = gc;
+    if (state.groupType === 'singles') {
+      if (state.players.length < 2) { toast('单打小组赛至少需要2名选手'); return; }
+    } else {
+      if (state.players.length < 4) { toast('双打小组赛至少需要4名选手'); return; }
+    }
+    state.rounds = generateGroupSchedule(state.players, gc, state.groupType);
+  }
+
+  if (!state.rounds || !state.rounds.length) { toast('无法生成赛程，请检查人数和场地设置'); return; }
+  var nCourts = state.courts || 2;
+  // 初始化每片场地的当前位置（全从0开始）
+  state.courtPositions = Array.from({length: nCourts}, function() { return 0; });
+  state.started = true;
+  state.finished = false;
+  saveData();
+  toast('赛程已生成：' + state.rounds.length + ' 轮');
+  switchTab('game');
+}
+// =================== GAME PAGE ===================
+function renderGame() {
+  var cont = document.getElementById('gameContent');
+  if (!state || !state.started || !state.rounds.length) {
+    cont.innerHTML = '<div class="empty"><div class="icon">🏓</div><div>请先完成设置并开始比赛</div><button class="btn btn-primary" style="margin-top:16px;" onclick="showSetupDetailPage()">去设置</button></div>';
+    return;
+  }
+
+  var nCourts = state.courts || 2;
+  var totalRounds = state.rounds.length;
+  // 兼容旧数据：若无 courtPositions，初始化
+  if (!state.courtPositions || state.courtPositions.length !== nCourts) {
+    state.courtPositions = Array.from({length: nCourts}, function() { return 0; });
+    saveData();
+  }
+
+  // 为每片场地建立自己的比赛序列（按顺序排列）
+  function getCourtSchedule(courtNum) {
+    var schedule = [];
+    state.rounds.forEach(function(rd) {
+      var match = (rd.matches || []).find(function(m) { return m.court === courtNum; });
+      if (match) {
+        schedule.push({ roundNum: rd.round, roundIdx: state.rounds.indexOf(rd), match: match });
+      }
+    });
+    return schedule;
+  }
+
+  // 计算全局完成进度
+  var totalMatches = 0, doneMatches = 0;
+  state.rounds.forEach(function(rd) { totalMatches += rd.matches.length; });
+  state.rounds.forEach(function(rd) { rd.matches.forEach(function(m) { if (m.done) doneMatches++; }); });
+  var progressPct = totalMatches > 0 ? Math.round(doneMatches / totalMatches * 100) : 0;
+  var allCourtsDone = state.courtPositions.every(function(pos, ci) {
+    return pos >= getCourtSchedule(ci + 1).length;
+  });
+
+  var overallHtml = '<div class="game-overall-progress">' +
+    '<div class="progress-row"><span>总进度</span><span>' + doneMatches + ' / ' + totalMatches + ' 场</span></div>' +
+    '<div class="progress-bar"><div class="progress-fill" style="width:' + progressPct + '%;"></div></div>' +
+    '<div class="text-sm mt8">' +
+      Array.from({length: nCourts}, function(_, ci) {
+        var sch = getCourtSchedule(ci + 1);
+        var pos = state.courtPositions[ci] || 0;
+        var courtDone = sch.filter(function(item) { return item.match.done; }).length;
+        return '场地' + (ci+1) + ': ' + courtDone + '/' + sch.length;
+      }).join('　') +
+    '</div>' +
+  '</div>';
+
+  var allDoneBanner = allCourtsDone ?
+    '<div class="all-courts-done-banner">🎉 所有场地比赛完成！</div>' : '';
+
+  var courtsHtml = Array.from({length: nCourts}, function(_, ci) {
+    var courtNum = ci + 1;
+    var schedule = getCourtSchedule(courtNum);
+    var pos = state.courtPositions[ci] || 0;
+    var courtDone = schedule.filter(function(item) { return item.match.done; }).length;
+
+    // 本场地状态
+    var courtStatusLabel, courtBadgeClass;
+    if (pos >= schedule.length) {
+      courtStatusLabel = '已完成'; courtBadgeClass = 'done';
+    } else if (schedule[pos] && schedule[pos].match.done) {
+      courtStatusLabel = '待下一场'; courtBadgeClass = 'active';
+    } else {
+      courtStatusLabel = '进行中'; courtBadgeClass = 'active';
+    }
+
+    // 当前比赛卡片
+    var matchCardHtml = '';
+    if (pos < schedule.length) {
+      var item = schedule[pos];
+      var m = item.match;
+      var roundNum = item.roundNum;
+      var matchIdx = item.roundIdx;
+      var mi = (m.court - 1); // within-round match index for this court
+      var winA = m.done && m.scoreA > m.scoreB;
+      var winB = m.done && m.scoreB > m.scoreA;
+      var isSingles = m.teamA.length === 1;
+
+      var scoreSection = '';
+      if (!m.done) {
+        if (isAdmin()) {
+          // 管理员模式：显示输入框
+          if (state.scoreMode === 'score') {
+            scoreSection = '<div class="score-row">' +
+              '<input class="score-input" id="c' + courtNum + '_sA" type="number" min="0" max="30" value="' + (m.scoreA !== null ? m.scoreA : '') + '" placeholder="0">' +
+              '<span class="score-sep">:</span>' +
+              '<input class="score-input" id="c' + courtNum + '_sB" type="number" min="0" max="30" value="' + (m.scoreB !== null ? m.scoreB : '') + '" placeholder="0">' +
+              '<button class="btn btn-sm btn-primary" style="margin-left:6px;" onclick="confirmCourtMatch(' + courtNum + ',' + matchIdx + ')">确认</button>' +
+            '</div>';
+          } else {
+            scoreSection = '<div style="display:flex;gap:8px;justify-content:center;">' +
+              '<button class="btn btn-primary btn-sm" onclick="setCourtWinner(' + courtNum + ',' + matchIdx + ',\'A\')">' + m.teamA.join('+') + ' 胜</button>' +
+              '<button class="btn btn-accent btn-sm" onclick="setCourtWinner(' + courtNum + ',' + matchIdx + ',\'B\')">' + m.teamB.join('+') + ' 胜</button>' +
+            '</div>';
+          }
+        } else {
+          // 观众模式：只显示提示
+          scoreSection = '<div style="text-align:center;padding:12px;background:var(--gray);border-radius:8px;margin-top:8px;">' +
+            '<div style="font-size:13px;color:var(--text2);margin-bottom:4px;">🔒 等待管理员输入比分</div>' +
+            '<div style="font-size:11px;color:var(--text3);">请联系赛事管理员输入比赛结果</div>' +
+          '</div>';
+        }
+      }
+
+      var aPlayers = isSingles
+        ? '<div class="player-names" style="font-size:16px;">' + m.teamA[0] + '</div>'
+        : '<div class="player-names">' + m.teamA[0] + '</div><div class="player-names">' + m.teamA[1] + '</div>';
+      var bPlayers = isSingles
+        ? '<div class="player-names" style="font-size:16px;">' + m.teamB[0] + '</div>'
+        : '<div class="player-names">' + m.teamB[0] + '</div><div class="player-names">' + m.teamB[1] + '</div>';
+
+      matchCardHtml =
+        '<div class="match-block">' +
+          (m.done ? '<div class="all-done-banner" style="padding:5px 10px;font-size:12px;margin-bottom:8px;background:var(--primary-light);border:1px solid var(--primary);color:var(--primary);">' + (winA ? m.teamA.join('+') : m.teamB.join('+')) + ' 获胜 ' + m.scoreA + ':' + m.scoreB + '</div>' : '') +
+          '<div class="match-teams">' +
+            '<div class="team-card ' + (m.done ? (winA ? 'winner' : 'loser') : '') + '">' +
+              '<div class="team-label">' + (isSingles ? '选手 A' : '队伍 A') + '</div>' +
+              aPlayers +
+              (m.done ? '<span class="' + (winA ? 'win-tag' : 'lose-tag') + '">' + (winA ? '胜' : '负') + '</span>' : '') +
+            '</div>' +
+            '<div class="vs-badge">VS</div>' +
+            '<div class="team-card ' + (m.done ? (winB ? 'winner' : 'loser') : '') + '">' +
+              '<div class="team-label">' + (isSingles ? '选手 B' : '队伍 B') + '</div>' +
+              bPlayers +
+              (m.done ? '<span class="' + (winB ? 'win-tag' : 'lose-tag') + '">' + (winB ? '胜' : '负') + '</span>' : '') +
+            '</div>' +
+          '</div>' +
+          (m.done ? '<div class="score-display">' + m.scoreA + ' : ' + m.scoreB + '</div>' : scoreSection) +
+        '</div>';
+    } else {
+      matchCardHtml = '<div class="empty" style="padding:20px;text-align:center;"><div style="font-size:32px;margin-bottom:8px;">✅</div><div style="color:var(--primary);font-weight:600;">本场地已完成</div></div>';
+    }
+
+    // 跳转到指定轮次
+    var roundOptions = schedule.map(function(item, si) {
+      var isDone = item.match.done;
+      return '<option value="' + si + '"' + (si === pos ? ' selected' : '') + '>第 ' + item.roundNum + ' 轮' + (isDone ? ' ✓' : '') + '</option>';
+    }).join('');
+
+    // 导航按钮
+    var prevBtn = pos > 0
+      ? '<button class="btn btn-secondary btn-sm" onclick="courtPrev(' + courtNum + ')">← 上一场</button>'
+      : '<button class="btn btn-secondary btn-sm" disabled style="opacity:0.4;cursor:not-allowed;">← 上一场</button>';
+    var nextBtn = pos < schedule.length
+      ? '<button class="btn btn-primary btn-sm" style="flex:1;" onclick="courtNext(' + courtNum + ')">' + (pos === schedule.length - 1 ? '结束本场地' : '下一场 →') + '</button>'
+      : '<button class="btn btn-primary btn-sm" disabled style="opacity:0.4;cursor:not-allowed;flex:1;">已完成</button>';
+
+    return '<div class="court-card">' +
+      '<div class="court-card-header">' +
+        '<span class="court-icon">🏟️</span>' +
+        '<div class="court-info">' +
+          '<div class="court-name">场地 ' + courtNum + '</div>' +
+          '<div class="court-status">已完成 ' + courtDone + ' / ' + schedule.length + ' 场</div>' +
+        '</div>' +
+        '<span class="court-badge ' + courtBadgeClass + '">' + courtStatusLabel + '</span>' +
+      '</div>' +
+      '<div class="court-card-body">' +
+        '<div style="font-size:12px;font-weight:600;color:var(--primary);margin-bottom:6px;">第 ' + (pos < schedule.length ? schedule[pos].roundNum : schedule[schedule.length-1].roundNum) + ' 轮</div>' +
+        matchCardHtml +
+        '<div class="court-nav">' +
+          prevBtn + nextBtn +
+          '<div class="court-round-skip" style="margin-left:auto;">' +
+            '<label>跳转：</label>' +
+            '<select onchange="courtJump(' + courtNum + ', this.value)">' + roundOptions + '</select>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  var endBtn = allCourtsDone ?
+    '<button class="btn btn-accent btn-block" onclick="endTournament()" style="margin-top:4px;">🏆 结束比赛，查看排行榜</button>' : '';
+
+  cont.innerHTML = overallHtml + allDoneBanner + courtsHtml + endBtn;
+}
+
+// 场地导航函数
+function courtPrev(courtNum) {
+  if (!state) return;
+  var ci = courtNum - 1;
+  if (state.courtPositions[ci] > 0) {
+    state.courtPositions[ci]--;
+    saveData();
+    renderGame();
+  }
+}
+
+function courtNext(courtNum) {
+  if (!state) return;
+  var ci = courtNum - 1;
+  var schedule = getCourtSchedule(courtNum);
+  var pos = state.courtPositions[ci];
+  if (pos < schedule.length) {
+    // 检查当前比赛是否完成
+    var currentMatch = schedule[pos].match;
+    if (!currentMatch.done) {
+      toast('请先完成当前比赛');
+      return;
+    }
+    state.courtPositions[ci] = pos + 1;
+    saveData();
+    renderGame();
+  }
+}
+
+function courtJump(courtNum, posStr) {
+  if (!state) return;
+  var ci = courtNum - 1;
+  var pos = parseInt(posStr);
+  var schedule = getCourtSchedule(courtNum);
+  if (pos >= 0 && pos <= schedule.length) {
+    state.courtPositions[ci] = pos;
+    saveData();
+    renderGame();
+  }
+}
+
+function getCourtSchedule(courtNum) {
+  var schedule = [];
+  state.rounds.forEach(function(rd, ri) {
+    var match = (rd.matches || []).find(function(m) { return m.court === courtNum; });
+    if (match) {
+      schedule.push({ roundNum: rd.round, roundIdx: ri, match: match });
+    }
+  });
+  return schedule;
+}
+
+function confirmCourtMatch(courtNum, roundIdx) {
+  if (!state) return;
+  requireAdmin(function() {
+    var rd = state.rounds[roundIdx];
+    var m = rd.matches[courtNum - 1];
+    var sA = document.getElementById('c' + courtNum + '_sA');
+    var sB = document.getElementById('c' + courtNum + '_sB');
+    if (sA) {
+      m.scoreA = sA.value === '' ? null : parseInt(sA.value);
+      m.scoreB = sB.value === '' ? null : parseInt(sB.value);
+    }
+    if (m.scoreA === null || m.scoreB === null) { toast('请输入比分'); return; }
+    if (m.scoreA === m.scoreB) { toast('比分不能相同'); return; }
+    m.done = true;
+    saveData();
+    renderGame();
+  });
+}
+
+function setCourtWinner(courtNum, roundIdx, team) {
+  if (!state) return;
+  requireAdmin(function() {
+    var rd = state.rounds[roundIdx];
+    var m = rd.matches[courtNum - 1];
+    m.scoreA = team === 'A' ? 1 : 0;
+    m.scoreB = team === 'B' ? 1 : 0;
+    m.done = true;
+    saveData();
+    renderGame();
+  });
+}
+
+function endTournament() {
+  if (!state) return;
+  state.finished = true;
+  syncHeader();
+  toast('比赛结束！查看排行榜');
+  switchTab('rank');
+  saveData();
+}
+
+function renderFinished() {
+  return '<div class="card" style="text-align:center;">' +
+    '<div style="font-size:48px;margin-bottom:12px;">🏆</div>' +
+    '<div style="font-size:18px;font-weight:700;margin-bottom:8px;">比赛全部完成！</div>' +
+    '<div class="text-sm">共 ' + state.rounds.length + ' 轮，点击"排行榜"查看结果</div>' +
+    '<button class="btn btn-primary btn-block mt12" onclick="switchTab(\'rank\')">查看排行榜</button>' +
+    '<button class="btn btn-secondary btn-block mt8" onclick="resetGame()">重新开始</button>' +
+  '</div>';
+}
+
+// 兼容旧 score input 函数（跳转到场地模式的统一入口）
+function onScoreInput(roundIdx, matchIdx, team, val) {
+  // 旧函数保留兼容，在场地模式下不再直接使用
+}
+// =================== SCHEDULE PAGE ===================
+var schViewMode = 'round'; // 'round' | 'court'
+
+function switchSchView(mode) {
+  schViewMode = mode;
+  renderSchedule();
+}
+
+function renderSchedule() {
+  var cont = document.getElementById('scheduleContent');
+  if (!state || !state.started || !state.rounds.length) {
+    cont.innerHTML = '<div class="empty"><div class="icon">📋</div>赛程尚未生成</div>';
+    return;
+  }
+
+  var courts = state.courts || 2;
+  var totalMatches = 0;
+  state.rounds.forEach(function(r) { totalMatches += r.matches.length; });
+
+  // ── 视图切换按钮 ──
+  var viewToggleHtml = '<div class="sch-view-toggle">' +
+    '<button class="toggle-btn' + (schViewMode === 'round' ? ' active' : '') + '" onclick="switchSchView(\'round\')">📊 按轮次</button>' +
+    '<button class="toggle-btn' + (schViewMode === 'court' ? ' active' : '') + '" onclick="switchSchView(\'court\')">🏟️ 按场地</button>' +
+  '</div>';
+
+  // ── 工具栏 ──
+  var toolbarHtml = '<div class="sch-toolbar">' +
+    '<span class="sch-toolbar-label">共 ' + state.rounds.length + ' 轮 · ' + totalMatches + ' 场</span>' +
+    '<button class="btn btn-outline btn-sm" onclick="showPrintPreview()">🖨 打印预览</button>' +
+  '</div>';
+
+  // ── 轮次视图（原逻辑） ──
+  function buildRoundView() {
+    var html = '';
+    state.rounds.forEach(function(roundData, ri) {
+      var allDone = roundData.matches.every(function(m) { return m.done; });
+      var isCurrent = !state.finished && roundData.matches.some(function(m) {
+        var ci = (m.court || 1) - 1;
+        var pos = state.courtPositions && state.courtPositions[ci] !== undefined ? state.courtPositions[ci] : 0;
+        var sch = getCourtSchedule(m.court);
+        return sch.length > pos && sch[pos].roundIdx === ri && !sch[pos].match.done;
+      });
+      var headerClass = allDone ? 'done' : (isCurrent ? 'current' : '');
+      var matchRows = roundData.matches.map(function(m) {
+        var winA = m.done && m.scoreA > m.scoreB;
+        var winB = m.done && m.scoreB > m.scoreA;
+        var scoreStr, resultLeft, resultRight;
+        if (m.done) {
+          scoreStr = '<span class="sch-score done">' + m.scoreA + ' : ' + m.scoreB + '</span>';
+          resultLeft = '<span class="sch-result ' + (winA?'w':'l') + '">' + (winA?'胜':'负') + '</span>';
+          resultRight = '<span class="sch-result ' + (winB?'w':'l') + '">' + (winB?'胜':'负') + '</span>';
+        } else if (isCurrent) {
+          scoreStr = '<span class="sch-score pending">进行中</span>';
+          resultLeft = ''; resultRight = '';
+        } else {
+          scoreStr = '<span class="sch-score pending">待赛</span>';
+          resultLeft = ''; resultRight = '';
+        }
+        return '<div class="sch-match-row">' +
+          '<span class="sch-court">场地' + m.court + '</span>' +
+          '<span class="sch-team ' + (m.done?(winA?'win':'lose'):'') + '">' + m.teamA.join(' + ') + '</span>' +
+          resultLeft +
+          scoreStr +
+          resultRight +
+          '<span class="sch-team ' + (m.done?(winB?'win':'lose'):'') + '" style="text-align:right;">' + m.teamB.join(' + ') + '</span>' +
+        '</div>';
+      }).join('');
+      var waitText = roundData.waiting.length ?
+        '<span style="opacity:0.75;font-size:11px;font-weight:400;">候场：' + roundData.waiting.join('、') + '</span>' :
+        '<span style="font-size:11px;font-weight:400;opacity:0.7">全员上场</span>';
+      return '<div class="sch-round">' +
+        '<div class="sch-round-header ' + headerClass + '">' +
+          '<span>第 ' + roundData.round + ' 轮 ' + (isCurrent ? '🔴' : allDone ? '✓' : '') + '</span>' +
+          waitText +
+        '</div>' +
+        matchRows +
+      '</div>';
+    });
+    return html;
+  }
+
+  // ── 场地视图（按场地分组） ──
+  function buildCourtView() {
+    // 收集所有场地
+    var courtNums = [];
+    for (var c = 1; c <= courts; c++) courtNums.push(c);
+
+    var colsHtml = courtNums.map(function(cn) {
+      var matchesForCourt = [];
+      state.rounds.forEach(function(roundData, ri) {
+        var match = roundData.matches.find(function(m) { return m.court === cn; });
+        if (match) {
+          matchesForCourt.push({ round: roundData.round, match: match, ri: ri });
+        }
+      });
+
+      var bodyHtml = matchesForCourt.length ? matchesForCourt.map(function(item) {
+        var m = item.match;
+        var isCurrent = item.ri === state.currentRound && !state.finished && !m.done;
+        var winA = m.done && m.scoreA > m.scoreB;
+        var winB = m.done && m.scoreB > m.scoreA;
+        var doneCls = m.done ? 'done' : 'pending';
+        var scoreStr = m.done ? m.scoreA + ' : ' + m.scoreB : (isCurrent ? '进行中' : '—');
+        return '<div class="sch-court-match ' + doneCls + '">' +
+          '<div class="round-lbl">第 ' + item.round + ' 轮</div>' +
+          '<div class="teams">' +
+            '<span class="team ' + (m.done?(winA?'winner':'loser'):'') + '">' + m.teamA.join('+') + '</span>' +
+            (m.done ? '<span class="result-badge ' + (winA?'win':'lose') + '">' + (winA?'胜':'负') + '</span>' : '') +
+            '<span class="score">' + scoreStr + '</span>' +
+            (m.done ? '<span class="result-badge ' + (winB?'win':'lose') + '">' + (winB?'胜':'负') + '</span>' : '') +
+            '<span class="team ' + (m.done?(winB?'winner':'loser'):'') + '" style="text-align:right;">' + m.teamB.join('+') + '</span>' +
+          '</div>' +
+        '</div>';
+      }).join('') : '<div class="sch-court-empty">暂无比赛</div>';
+
+      return '<div class="sch-court-col">' +
+        '<div class="sch-court-card">' +
+          '<div class="sch-court-card-header">🏟️ 场地 ' + cn + '</div>' +
+          '<div class="sch-court-card-body">' + bodyHtml + '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    return '<div class="sch-court-grid">' + colsHtml + '</div>';
+  }
+
+  // ── 打印版内容 ──
+  var printDate = new Date().toLocaleDateString('zh-CN', {year:'numeric',month:'long',day:'numeric'});
+  var printRows = '';
+  state.rounds.forEach(function(rd) {
+    rd.matches.forEach(function(m) {
+      var score = m.done ? (m.scoreA + ' - ' + m.scoreB) : '—';
+      var status = m.done ? '✓' : '○';
+      printRows += '<tr>' +
+        '<td class="t">第' + rd.round + '轮</td>' +
+        '<td class="t">' + m.court + '</td>' +
+        '<td class="t ta">' + m.teamA.join(' / ') + '</td>' +
+        '<td class="t sc">' + score + '</td>' +
+        '<td class="t ta">' + m.teamB.join(' / ') + '</td>' +
+        '<td class="t">' + status + '</td>' +
+      '</tr>';
+    });
+  });
+  var printHtml = '<div id="printSchedule" class="no-print-block">' +
+    '<div class="print-header">' +
+      '<div class="print-title">' + (state.name || '比赛') + ' · 赛程表</div>' +
+      '<div class="print-meta">日期：' + printDate + '　　场地数：' + courts + '　　参赛人数：' + (state.players || []).filter(function(p){return p&&p.trim();}).length + '人</div>' +
+    '</div>' +
+    '<table class="print-table">' +
+      '<thead><tr><th>轮次</th><th>场地</th><th>队伍 A</th><th>比分</th><th>队伍 B</th><th>状态</th></tr></thead>' +
+      '<tbody>' + printRows + '</tbody>' +
+    '</table>' +
+    '<div class="print-footer">球馆小赛 · 扫码管理赛程</div>' +
+  '</div>';
+
+  // ── 组装 ──
+  var bodyContent = schViewMode === 'round' ? buildRoundView() : buildCourtView();
+  cont.innerHTML = printHtml + toolbarHtml + viewToggleHtml + bodyContent;
+}
+// =================== RANK PAGE ===================
+function calcStats() {
+  if (!state) return {};
+  var stats = {};
+  state.players.forEach(function(p) {
+    stats[p] = { name: p, pts: 0, win: 0, lose: 0, gf: 0, ga: 0, played: 0, partners: {}, h2h: {} };
+  });
+  var parts = state.pointsRule.split('-').map(Number);
+  var winPts = parts[0], losePts = parts[1];
+  state.rounds.forEach(function(rd) {
+    rd.matches.forEach(function(m) {
+      if (!m.done) return;
+      var sA = m.scoreA, sB = m.scoreB;
+      var aWon = sA > sB;
+      m.teamA.concat(m.teamB).forEach(function(p) { if (stats[p]) stats[p].played++; });
+      m.teamA.forEach(function(p) {
+        if (!stats[p]) return;
+        stats[p].pts += aWon ? winPts : losePts;
+        aWon ? stats[p].win++ : stats[p].lose++;
+        stats[p].gf += sA; stats[p].ga += sB;
+      });
+      m.teamB.forEach(function(p) {
+        if (!stats[p]) return;
+        stats[p].pts += aWon ? losePts : winPts;
+        aWon ? stats[p].lose++ : stats[p].win++;
+        stats[p].gf += sB; stats[p].ga += sA;
+      });
+      // 记录 H2H 对阵净胜分（跨队选手两两记录）
+      m.teamA.forEach(function(pA) {
+        m.teamB.forEach(function(pB) {
+          if (!stats[pA] || !stats[pB]) return;
+          if (!stats[pA].h2h[pB]) stats[pA].h2h[pB] = 0;
+          stats[pA].h2h[pB] += sA - sB;
+          if (!stats[pB].h2h[pA]) stats[pB].h2h[pA] = 0;
+          stats[pB].h2h[pA] += sB - sA;
+        });
+      });
+      if (m.teamA.length === 2) {
+        var a00 = m.teamA[0], a01 = m.teamA[1];
+        if (stats[a00]) stats[a00].partners[a01] = (stats[a00].partners[a01]||0)+1;
+        if (stats[a01]) stats[a01].partners[a00] = (stats[a01].partners[a00]||0)+1;
+      }
+      if (m.teamB.length === 2) {
+        var b00 = m.teamB[0], b01 = m.teamB[1];
+        if (stats[b00]) stats[b00].partners[b01] = (stats[b00].partners[b01]||0)+1;
+        if (stats[b01]) stats[b01].partners[b00] = (stats[b01].partners[b00]||0)+1;
+      }
+    });
+  });
+  return stats;
+}
+
+function renderRank() {
+  var cont = document.getElementById('rankContent');
+  if (!state || !state.started || !state.rounds.length) {
+    cont.innerHTML = '<div class="empty"><div class="icon">🏆</div>比赛尚未开始</div>';
+    return;
+  }
+  var stats = calcStats();
+  var isGroup = state.format === 'group';
+  var sorted = Object.values(stats).sort(function(a, b) {
+    if (isGroup) {
+      // 小组赛：胜场 → H2H对阵净胜分 → 总净胜分 → 总得分
+      if (b.win !== a.win) return b.win - a.win;
+      var h2h = 0;
+      if (a.h2h && a.h2h[b.name] !== undefined) {
+        h2h = a.h2h[b.name];
+      } else if (b.h2h && b.h2h[a.name] !== undefined) {
+        h2h = -b.h2h[a.name];
+      }
+      if (h2h !== 0) return -h2h;
+      var da = a.gf - a.ga, db = b.gf - b.ga;
+      if (db !== da) return db - da;
+      return b.gf - a.gf;
+    } else {
+      // 轮转赛：积分 → 总净胜分 → 总得分（原逻辑）
+      if (b.pts !== a.pts) return b.pts - a.pts;
+      var da = a.gf - a.ga, db = b.gf - b.ga;
+      if (db !== da) return db - da;
+      return b.gf - a.gf;
+    }
+  });
+
+  function rankBadge(i) {
+    if (i===0) return '<span class="rank-badge rank-1">1</span>';
+    if (i===1) return '<span class="rank-badge rank-2">2</span>';
+    if (i===2) return '<span class="rank-badge rank-3">3</span>';
+    return '<span class="rank-badge rank-n">' + (i+1) + '</span>';
+  }
+
+  var tableHtml = '<div class="card">' +
+    '<div class="card-title"><span class="dot"></span>积分排行榜 · ' + (state.name||'') + '</div>' +
+    '<table class="lb-table">' +
+      '<thead><tr><th>选手</th>' + (isGroup ? '<th>胜场</th>' : '') +
+    '<th>积分</th><th>胜/负</th><th>得分</th><th>净胜</th></tr></thead>' +
+      '<tbody>' +
+        sorted.map(function(s, i) { return '<tr>' +
+          '<td>' + rankBadge(i) + s.name + '</td>' +
+          (isGroup ? '<td class="bold">' + s.win + '</td>' : '') +
+          '<td class="bold ' + (isGroup?'':'green') + '">' + s.pts + '</td>' +
+          '<td>' + s.win + '/' + s.lose + '</td>' +
+          '<td>' + s.gf + '</td>' +
+          '<td class="' + (s.gf-s.ga>=0?'green':'red') + '">' + (s.gf-s.ga>=0?'+':'') + (s.gf-s.ga) + '</td>' +
+        '</tr>'; }).join('') +
+      '</tbody></table></div>';
+
+  var isSinglesMode = state.format === 'group' && state.groupType === 'singles';
+  var partnerHtml = '';
+  if (!isSinglesMode) {
+    var hasPartners = sorted.some(function(s) { return Object.keys(s.partners).length > 0; });
+    if (hasPartners) {
+      partnerHtml = '<div class="card">' +
+        '<div class="card-title"><span class="dot"></span>搭档配对记录</div>' +
+        '<div class="partner-list">' +
+          sorted.map(function(s) {
+            var chips = Object.entries(s.partners).map(function(entry) { return '<span class="partner-chip">' + entry[0] + '×' + entry[1] + '</span>'; }).join('');
+            return chips ? '<div class="partner-row"><span class="partner-name">' + s.name + '</span>' + chips + '</div>' : '';
+          }).join('') +
+        '</div></div>';
+    }
+  }
+
+  var byeCount = {};
+  state.players.forEach(function(p) { byeCount[p] = 0; });
+  state.rounds.forEach(function(r) { r.waiting.forEach(function(p) { byeCount[p]++; }); });
+  var totalByes = Object.values(byeCount).reduce(function(a, b) { return a + b; }, 0);
+  var byeHtml = '<div class="card" style="margin-bottom:0;">' +
+    '<div class="card-title"><span class="dot"></span>' + (isSinglesMode ? '比赛统计' : '上场/候场统计') + '</div>' +
+    '<div class="partner-list">' +
+      state.players.map(function(p) {
+        var s = stats[p];
+        var bye = byeCount[p]||0;
+        return '<div class="partner-row">' +
+          '<span class="partner-name">' + p + '</span>' +
+          '<span class="partner-chip" style="background:var(--primary-light);color:var(--primary)">上场 ' + s.played + ' 次</span>' +
+          (!isSinglesMode && bye > 0 ? '<span class="partner-chip" style="background:#fff3e0;color:#8a4000">候场 ' + bye + ' 次</span>' : '') +
+        '</div>';
+      }).join('') +
+    '</div>' +
+    '<button class="btn btn-secondary btn-block mt12" onclick="resetGame()">重置 · 重新开始</button>' +
+    '</div>';
+
+  cont.innerHTML = tableHtml + partnerHtml + byeHtml;
+}
+
+// =================== RESET ===================
+function resetGame() {
+  if (!state) return;
+  if (!confirm('确认重置当前比赛？数据将清空，可重新设置后开始。')) return;
+  state.players = state.players || [];
+  state.rounds = [];
+  state.currentRound = 0;
+  state.started = false;
+  state.finished = false;
+  state.scoreMode = 'score';
+  state.pointsRule = '3-1';
+  state.courts = 2;
+  saveData();
+  syncHeader();
+  showSetupDetailPage();
+}
+
+// =================== REGISTRATION SYSTEM ===================
+const REG_KEY = 'upb_reg_v1'; // 共享报名数据 key
+
+function getRegData() {
+  try { return JSON.parse(localStorage.getItem(REG_KEY) || '{"pending":[],"approved":[]}'); }
+  catch(e) { return { pending: [], approved: [] }; }
+}
+
+function saveRegData(rd) { localStorage.setItem(REG_KEY, JSON.stringify(rd)); }
+
+function renderRegPage() {
+  var cont = document.getElementById('regContent');
+  if (!state) {
+    cont.innerHTML = '<div class="no-tour-selected"><div class="icon">🏓</div><div class="msg">请先创建或选择一个比赛</div><button class="btn btn-primary" onclick="showListPage()">去赛事列表</button></div>';
+    return;
+  }
+  var rd = getRegData();
+  var tourRegs = rd.pending.filter(function(r) { return r.tourId === state.id; });
+  var approved = rd.approved.filter(function(r) { return r.tourId === state.id; });
+
+  // 当前 URL 作为报名链接（去掉查询参数）
+  var baseUrl = location.href.split('?')[0];
+  // 如果是 file:// 协议，提示需要启动本地服务
+  var isFileUrl = baseUrl.startsWith('file://');
+  var regUrl = baseUrl + '?reg=1&tour=' + encodeURIComponent(state.id) + '&name=' + encodeURIComponent(state.name || '比赛');
+
+  var qrId = 'regQR_' + state.id;
+  cont.innerHTML =
+    '<div class="card">' +
+      '<div class="card-title"><span class="dot"></span>报名二维码</div>' +
+      (isFileUrl ?
+        '<div class="reg-item" style="border-bottom:none;flex-direction:column;align-items:flex-start;gap:8px;">' +
+          '<div class="text-sm" style="color:var(--accent);background:var(--accent-light);padding:8px 10px;border-radius:6px;font-size:13px;">⚠️ 当前为本地文件模式，二维码无法跨设备使用。</div>' +
+          '<div class="text-sm" style="color:var(--text3);font-size:13px;">请先启动本地服务，再刷新获取新二维码：</div>' +
+          '<code style="font-size:12px;background:var(--gray);padding:6px 10px;border-radius:4px;display:block;width:100%;word-break:break-all;">cd ' + baseUrl.replace('file://','').replace(/\/[^\/]*$/,'') + '\npython -m http.server 8080</code>' +
+          '<div class="text-sm" style="color:var(--text3);font-size:12px;">启动后访问 <strong>http://localhost:8080</strong> 刷新页面，二维码链接将变为可访问地址</div>' +
+        '</div>' :
+        '<div id="' + qrId + '" style="display:flex;justify-content:center;padding:12px 0;"></div>'
+      ) +
+      '<div class="text-sm" style="text-align:center;color:var(--text3);margin-bottom:8px;">微信扫码报名，报名后需主办方审核</div>' +
+      '<div class="setup-row" style="align-items:center;">' +
+        '<span class="setup-label" style="font-size:12px;">报名链接</span>' +
+        '<input class="player-input" id="regUrlInput" value="' + escapeHtml(regUrl) + '" readonly style="flex:1;font-size:12px;">' +
+        '<button class="btn btn-outline btn-sm" style="margin-left:8px;flex-shrink:0;" onclick="copyRegUrl()">复制</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="card">' +
+      '<div class="card-title"><span class="dot"></span>待审核 <span class="badge" style="background:var(--accent-light);color:var(--accent);font-size:12px;padding:2px 8px;border-radius:10px;">' + tourRegs.length + '</span></div>' +
+      (tourRegs.length === 0 ? '<div class="text-sm" style="color:var(--text3);padding:8px 0;">暂无待审核报名</div>' :
+        '<div id="regPendingList">' + tourRegs.map(function(r, i) {
+          var idx = rd.pending.indexOf(r);
+          return '<div class="reg-item">' +
+            '<div class="reg-info"><span class="reg-name">' + escapeHtml(r.name) + '</span><span class="reg-time">' + formatRegTime(r.time) + '</span></div>' +
+            '<div class="btn-row" style="gap:6px;">' +
+              '<button class="btn btn-primary btn-sm" onclick="approveReg(' + idx + ')">通过</button>' +
+              '<button class="btn btn-secondary btn-sm" style="color:var(--accent);border-color:var(--accent);" onclick="rejectReg(' + idx + ')">拒绝</button>' +
+            '</div>' +
+          '</div>';
+        }).join('') + '</div>'
+      ) +
+    '</div>' +
+    '<div class="card">' +
+      '<div class="card-title"><span class="dot"></span>已通过 (' + approved.length + ')</div>' +
+      (approved.length === 0 ? '<div class="text-sm" style="color:var(--text3);padding:8px 0;">暂无已通过选手</div>' :
+        '<div>' + approved.map(function(r) {
+          return '<div class="reg-item">' +
+            '<div class="reg-info"><span class="reg-name green">' + escapeHtml(r.name) + '</span><span class="reg-time">' + formatRegTime(r.time) + '</span></div>' +
+            '<button class="btn-del" onclick="removeReg(\'approved\',' + approved.indexOf(r) + ')">×</button>' +
+          '</div>';
+        }).join('') + '</div>'
+      ) +
+    '</div>' +
+    '<div class="card">' +
+      '<button class="btn btn-secondary btn-block btn-sm" onclick="clearAllRegs()">清空所有报名记录</button>' +
+    '</div>';
+
+  // 生成二维码（仅 http URL 时）
+  if (!isFileUrl) {
+    var qrContainer = document.getElementById(qrId);
+    if (qrContainer) {
+      qrContainer.innerHTML = '';
+      if (window.QRCode) {
+        new QRCode(qrContainer, { text: regUrl, width: 160, height: 160, colorDark: '#1a1a1a', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H });
+      }
+    }
+  }
+
+  // 同设备跨窗口推送：如果 admin 页面有注册推送，则处理
+  checkIncomingRegs();
+  // 每 3 秒轮询一次 shared localStorage
+  if (window._regPollTimer) clearInterval(window._regPollTimer);
+  window._regPollTimer = setInterval(checkIncomingRegs, 3000);
+}
+
+function escapeHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatRegTime(ts) {
+  var d = new Date(ts);
+  return d.getMonth()+1 + '/' + d.getDate() + ' ' + d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+}
+
+function copyRegUrl() {
+  var inp = document.getElementById('regUrlInput');
+  if (navigator.clipboard) { navigator.clipboard.writeText(inp.value); toast('已复制'); }
+  else { inp.select(); document.execCommand('copy'); toast('已复制'); }
+}
+
+function checkIncomingRegs() {
+  var pending = getRegData().pending;
+  if (!state) return;
+  var mine = pending.filter(function(r) { return r.tourId === state.id; });
+  if (mine.length > 0) renderRegPage();
+}
+
+function approveReg(idx) {
+  var rd = getRegData();
+  var item = rd.pending[idx];
+  if (!item) return;
+  if (!state.players) state.players = [];
+  // 避免重复姓名
+  var exists = state.players.some(function(p) { return p.trim() === item.name.trim(); });
+  if (!exists) {
+    state.players.push(item.name.trim());
+    saveData();
+    renderPlayerList();
+  }
+  rd.pending.splice(idx, 1);
+  rd.approved.push(item);
+  saveRegData(rd);
+  renderRegPage();
+  toast('已通过：' + item.name);
+}
+
+function rejectReg(idx) {
+  var rd = getRegData();
+  var item = rd.pending[idx];
+  if (!item) return;
+  rd.pending.splice(idx, 1);
+  saveRegData(rd);
+  renderRegPage();
+  toast('已拒绝：' + item.name);
+}
+
+function removeReg(type, idx) {
+  var rd = getRegData();
+  var arr = rd[type];
+  if (!arr[idx]) return;
+  var name = arr[idx].name;
+  arr.splice(idx, 1);
+  saveRegData(rd);
+  renderRegPage();
+  toast('已移除：' + name);
+}
+
+function clearAllRegs() {
+  if (!confirm('确定清空所有报名记录？')) return;
+  saveRegData({ pending: [], approved: [] });
+  renderRegPage();
+  toast('已清空');
+}
+
+// 报名弹窗
+function showRegModal(tourId, tourName) {
+  var rd = getRegData();
+  var alreadyReg = rd.pending.some(function(r) { return r.tourId === tourId && r.name === window._myRegName; }) ||
+                   rd.approved.some(function(r) { return r.tourId === tourId && r.name === window._myRegName; });
+  var body = document.getElementById('regModalBody');
+  body.innerHTML =
+    '<div style="text-align:center;margin-bottom:16px;">' +
+      '<div style="font-size:18px;font-weight:600;margin-bottom:4px;">' + escapeHtml(tourName) + '</div>' +
+      '<div style="color:var(--text3);font-size:13px;">请填写您的姓名完成报名</div>' +
+    '</div>' +
+    '<div style="margin-bottom:12px;">' +
+      '<input id="regNameInput" class="player-input" placeholder="输入您的姓名" value="' + (window._myRegName||'') + '" style="width:100%;">' +
+    '</div>' +
+    (alreadyReg ? '<div class="text-sm" style="color:var(--primary-mid);text-align:center;margin-bottom:12px;">您已报名成功，请等待审核</div>' : '') +
+    '<button class="btn btn-primary btn-block" ' + (alreadyReg ? 'disabled style="opacity:0.5"' : '') + ' onclick="submitReg(\'' + escapeAttr(tourId) + '\')">提交报名</button>' +
+    '<div class="text-sm" style="color:var(--text3);text-align:center;margin-top:12px;">报名后需主办方审核通过方可参赛</div>';
+  document.getElementById('regModal').classList.add('show');
+}
+
+function closeRegModal() {
+  document.getElementById('regModal').classList.remove('show');
+}
+
+function escapeAttr(s) {
+  return (s||'').replace(/"/g, '&quot;');
+}
+
+function submitReg(tourId) {
+  var name = document.getElementById('regNameInput').value.trim();
+  if (!name) { toast('请输入姓名'); return; }
+  if (name.length > 20) { toast('姓名不能超过20字'); return; }
+  var rd = getRegData();
+  // 避免重复报名
+  var dup = rd.pending.some(function(r) { return r.tourId === tourId && r.name === name; }) ||
+            rd.approved.some(function(r) { return r.tourId === tourId && r.name === name; });
+  if (dup) { toast('您已报名，请勿重复提交'); return; }
+  rd.pending.push({ tourId: tourId, name: name, time: Date.now() });
+  saveRegData(rd);
+  window._myRegName = name;
+  // 尝试通知同设备的管理员页面
+  try {
+    var admins = document.querySelectorAll('iframe[name="admin_' + tourId + '"]');
+    admins.forEach(function(iframe) {
+      try { var win = iframe.contentWindow; if (win && win.checkIncomingRegs) win.checkIncomingRegs(); } catch(e) {}
+    });
+  } catch(e) {}
+  closeRegModal();
+  toast('报名成功！请等待审核');
+  // 弹出确认提示
+  setTimeout(function() {
+    alert('报名成功！\n\n您的报名信息：' + name + '\n请将手机页面展示给主办方审核');
+  }, 100);
+}
+
+// =================== PRINT PREVIEW ===================
+function showPrintPreview() {
+  if (!state || !state.rounds || !state.rounds.length) {
+    toast('暂无赛程数据');
+    return;
+  }
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    toast('PDF 库加载失败，请检查网络后刷新页面');
+    return;
+  }
+
+  var printDate = new Date().toLocaleDateString('zh-CN', {year:'numeric',month:'long',day:'numeric'});
+  var validPlayers = (state.players || []).filter(function(p) { return p && p.trim(); }).length;
+  var totalMatches = 0;
+  state.rounds.forEach(function(r) { totalMatches += r.matches.length; });
+
+  var doc = new jspdf.jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  var pageW = doc.internal.pageSize.getWidth();
+  var margin = 14;
+  var y = 20;
+
+  // 标题
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(18);
+  doc.setTextColor(0, 0, 0);
+  doc.text(state.name || '比赛', pageW / 2, y, { align: 'center' });
+  y += 8;
+
+  // 副标题
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(10);
+  doc.setTextColor(80, 80, 80);
+  var sub = '日期：' + printDate + '    场地数：' + (state.courts || 2) + '    参赛人数：' + validPlayers + '人    共 ' + state.rounds.length + ' 轮 · ' + totalMatches + ' 场';
+  doc.text(sub, pageW / 2, y, { align: 'center' });
+  y += 12;
+
+  // 表格数据
+  var headers = [['轮次','场地','队伍 A','比分','队伍 B','状态']];
+  var body = [];
+  state.rounds.forEach(function(rd) {
+    rd.matches.forEach(function(m) {
+      var score = m.done ? (m.scoreA + ' - ' + m.scoreB) : '—';
+      var status = m.done ? '✓' : '○';
+      body.push(['第' + rd.round + '轮', String(m.court), m.teamA.join(' / '), score, m.teamB.join(' / '), status]);
+    });
+  });
+
+  doc.autoTable({
+    head: headers,
+    body: body,
+    startY: y,
+    margin: { left: margin, right: margin },
+    styles: { fontSize: 9, textColor: [0,0,0], lineColor: [140,140,140], lineWidth: 0.2, font: 'helvetica' },
+    headStyles: { fillColor: [220,220,220], textColor: [0,0,0], fontStyle: 'bold', lineColor: [100,100,100] },
+    alternateRowStyles: { fillColor: [245,245,245] },
+    tableLineColor: [180,180,180],
+    tableLineWidth: 0.2,
+  });
+
+  // 页脚
+  var finalY = doc.lastAutoTable ? doc.lastAutoTable.endY + 10 : y + 20;
+  doc.setFontSize(8);
+  doc.setTextColor(150, 150, 150);
+  doc.text('球馆小赛 · 扫码管理赛程', pageW / 2, finalY, { align: 'center' });
+
+  // 输出到 iframe 预览
+  var blob = doc.output('blob');
+  var url = URL.createObjectURL(blob);
+  var frame = document.getElementById('pdfPreviewFrame');
+  frame.src = url;
+  document.getElementById('printPreviewModal').classList.add('show');
+
+  // 保存供下载
+  window.__schedulePDFDoc = doc;
+  window.__schedulePDFUrl = url;
+}
+
+function closePrintPreview() {
+  var frame = document.getElementById('pdfPreviewFrame');
+  if (frame) frame.src = '';
+  if (window.__schedulePDFUrl) { URL.revokeObjectURL(window.__schedulePDFUrl); window.__schedulePDFUrl = null; }
+  document.getElementById('printPreviewModal').classList.remove('show');
+}
+
+function downloadPDF() {
+  var doc = window.__schedulePDFDoc;
+  if (!doc) { toast('PDF 尚未生成'); return; }
+  doc.save((state.name || '比赛') + '_赛程表.pdf');
+}
+
+// =================== INIT ===================
+loadData();
+
+// 处理扫码报名参数 ?reg=1&tour=xxx
+(function() {
+  var params = {};
+  location.search.slice(1).split('&').forEach(function(pair) {
+    var kv = pair.split('=');
+    params[decodeURIComponent(kv[0]||'')] = decodeURIComponent(kv[1]||'');
+  });
+  if (params.reg === '1' && params.tour) {
+    // 扫码报名模式：隐藏主 app，显示报名弹窗
+    var targetTour = data.tournaments.find(function(t) { return t.id === params.tour; });
+    if (targetTour) {
+      activateTournament(targetTour.id);
+      document.getElementById('app').style.display = 'none';
+      document.getElementById('regModal').classList.add('show');
+      showRegModal(params.tour, params.name || targetTour.name || '比赛报名');
+    } else {
+      document.getElementById('app').style.display = 'none';
+      document.getElementById('regModal').classList.add('show');
+      document.getElementById('regModalBody').innerHTML =
+        '<div style="text-align:center;padding:20px 0;"><div class="icon" style="font-size:40px;">⚠️</div>' +
+        '<div style="font-size:15px;font-weight:600;margin:12px 0;">未找到对应比赛</div>' +
+        '<div class="text-sm" style="color:var(--text3);">可能比赛已被删除，请联系主办方确认。</div></div>';
+    }
+    return;
+  }
+  // 正常启动：显示赛事列表页
+  showListPage();
+})();
+</script>
+</body>
+</html>
+
